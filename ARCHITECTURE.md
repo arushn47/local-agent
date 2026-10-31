@@ -1,5 +1,7 @@
 # LocalAgent architecture
 
+2026-11-01 implementation correction: the Phase 8 architecture below includes intended behavior not yet integrated. Specialized roles are not yet installed into generated OpenCode config; exact catalog assignments, supervised workflow lifecycle, durable recovery and per-workflow boundary attribution remain recovery gates. Custom-runner/live-double artifacts do not verify that production path. False-success recovery now fails on missing executors/timeouts/provider/observation errors, treats prose as unverified, and checks every step before workflow completion. **150/150** regressions and UI build pass; API/checkpoint security is the next checkpoint. No release artifact was rebuilt.
+
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.
 
 Phase 5 keeps one runtime/agent/dispatch path. Windows distribution pruning removes only postinstall duplicate engines and non-x64 ONNX binaries, retaining selected runtime assets and notices. Installer activation is a sibling-directory transaction: validate candidate, retain prior payload, swap, expose explicit rollback; user data stays outside the transaction. Hash-pinned NSIS overlays preserve upstream registration/shortcuts. No user-data migration or automatic update execution is introduced. Signing is explicit and fail-closed; future signed release metadata has no network/execution authority yet. Routing/gateway diagnostics rotate locally; upstream database retention is separate.

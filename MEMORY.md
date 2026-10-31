@@ -1,5 +1,9 @@
 # Development memory
 
+## Authoritative recovery status — 2026-11-01
+
+Phase 8 remains partial. Earlier all-complete and live-integration claims in this historical log overstate custom-runner/UI evidence. Local baseline `21eacb4` preserves code/docs; secrets, installers and raw private/generated artifacts are ignored and remain on disk. False-success checkpoint passes **150/150** regressions and UI build: no executor means failure, timeout/observation/provider errors fail, test/review prose is unverified, final completion checks all steps. Fixtures are explicitly identified custom-runner evidence. Next: API/checkpoint security, then actual supervised OpenCode execution, durable non-replaying recovery, attributed budgets and role enforcement. No live test or release action authorized by these fixture results.
+
 Updated 2026-10-30. Phases 1-4, 0.5.0/0.5.1, Phase 6.5 (110/110 tests), and Phase 7 (111/111 tests) are accepted development milestones. **0.5.2 is a Phase 5.2 development candidate; public release is blocked.** Phase 7 Dark IDE Workspace and light mode polish are complete and verified (111/111 tests); Phase 8 Multi-Agent Workflows & Free-First Model Orchestration planning is now underway.
 
 

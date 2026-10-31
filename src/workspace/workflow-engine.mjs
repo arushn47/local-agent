@@ -175,6 +175,7 @@ export function retryStep(workflowId, stepId, { alternateModelId = null, workspa
   const step = wf.stepStates[stepId];
   if (!step) throw new Error(`step_not_found: ${stepId}`);
 
+  if (step.status !== STEP_STATUS.FAILED) throw Error('workflow_retry_requires_failed_step');
   step.status = STEP_STATUS.PENDING;
   step.error = null;
   if (alternateModelId) {
@@ -232,7 +233,9 @@ export async function executeStep({
   catalog = null,
   conflictMatrix = null,
   runner = null,
-  handoffContext = null
+  handoffContext = null,
+  executionTimeoutMs = 120000,
+  pollIntervalMs = 1000
 }) {
   const wf = loadWorkflow(workflowId, workspaceDir);
   if (!wf) throw new Error(`workflow_not_found: ${workflowId}`);
@@ -333,15 +336,17 @@ export async function executeStep({
         checkpoint,
         workspaceDir
       });
-      executionOutput = res?.output || 'Step completed successfully';
-      testPassed = res?.testPassed !== undefined ? res.testPassed : (step.agent === 'tester' ? true : null);
-      reviewerApproved = res?.reviewerApproved !== undefined ? res.reviewerApproved : (step.agent === 'reviewer' ? true : null);
-      modifiedFiles = res?.modifiedFiles || step.targetFiles;
+      if (res?.verified !== true) throw Error('workflow_runner_outcome_unverified');
+      executionOutput = res.output || '';
+      testPassed = res.testPassed ?? null;
+      reviewerApproved = res.reviewerApproved ?? null;
+      modifiedFiles = res.modifiedFiles || [];
     } else if (engine) {
       // Genuine OpenCode invocation!
       const client = engine.forProject(workspaceDir);
       const sessionData = (await client.session.create({ title: `[${step.agent}] ${step.title}` })).data;
       const sessionID = sessionData.id;
+      if (!sessionID) throw Error('workflow_session_creation_failed');
       const assignedModel = step.assignedModel || 'localagent/coding';
 
       await client.session.promptAsync({
@@ -357,16 +362,26 @@ export async function executeStep({
       // Bounded poll for completion
       let completed = false;
       const startPoll = Date.now();
-      while (!completed && (Date.now() - startPoll < 120000)) {
-        await new Promise(r => setTimeout(r, 1000));
-        const statusRes = (await client.session.status().catch(() => ({}))).data || {};
-        const msgRes = (await client.session.messages({ sessionID, limit: 100 }).catch(() => ({}))).data || [];
+      try {
+      while (!completed && (Date.now() - startPoll < Math.min(executionTimeoutMs, 120000))) {
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+        const control = loadWorkflow(workflowId, workspaceDir);
+        if (control.status !== WORKFLOW_STATUS.RUNNING && control.status !== WORKFLOW_STATUS.PENDING) throw Error('workflow_execution_interrupted');
+        const statusRes = (await client.session.status()).data;
+        const msgRes = (await client.session.messages({ sessionID, limit: 100 })).data;
+        if (!statusRes || !Array.isArray(msgRes)) throw Error('workflow_observation_unavailable');
 
         const lastMsg = msgRes.filter(m => m.info?.role === 'assistant').at(-1);
-        if (statusRes[sessionID]?.type !== 'busy' && lastMsg?.info?.finish && lastMsg.info.finish !== 'tool-calls') {
+        if (lastMsg?.info?.error) throw Error('workflow_provider_error');
+        if (!['busy', 'retry'].includes(statusRes[sessionID]?.type) && lastMsg?.info?.time?.completed && lastMsg.info.finish === 'stop') {
           completed = true;
           executionOutput = lastMsg.parts?.filter(p => p.type === 'text').map(p => p.text).join('\n') || '';
         }
+      }
+      if (!completed) throw Error('workflow_execution_timeout');
+      } catch (error) {
+        await client.session.abort({ sessionID }).catch(() => {});
+        throw error;
       }
 
       try {
@@ -374,18 +389,11 @@ export async function executeStep({
         modifiedFiles = diffRes.map(d => d.file);
       } catch {}
 
-      if (step.agent === 'tester') {
-        testPassed = !executionOutput.toLowerCase().includes('fail') && !executionOutput.toLowerCase().includes('error');
-      }
-      if (step.agent === 'reviewer') {
-        reviewerApproved = !executionOutput.toLowerCase().includes('changes_requested') && !executionOutput.toLowerCase().includes('reject');
-      }
+      // Text is not a test result or review approval. Lifecycle integration
+      // must supply independently verifiable outcomes before these roles pass.
+      if (step.agent === 'tester' || step.agent === 'reviewer') throw Error('workflow_verification_unavailable');
     } else {
-      // Fallback deterministic execution
-      executionOutput = `Step "${step.title}" executed by ${step.agent} using ${step.assignedModel || 'default model'}.`;
-      testPassed = step.agent === 'tester' ? true : null;
-      reviewerApproved = step.agent === 'reviewer' ? true : null;
-      modifiedFiles = step.targetFiles;
+      throw Error('workflow_executor_unavailable');
     }
   } catch (err) {
     executionError = err;
@@ -418,6 +426,7 @@ export async function executeStep({
   latestStep.testPassed = testPassed;
   latestStep.reviewerApproved = reviewerApproved;
   latestStep.modifiedFiles = modifiedFiles;
+  latestStep.evidenceSource = runner ? 'custom_runner' : 'opencode_session';
 
   saveWorkflow(latestWf, workspaceDir);
 
@@ -593,6 +602,9 @@ export async function runWorkflow({
     }
 
     wf = loadWorkflow(workflowId, workspaceDir);
+    if (wf.status === WORKFLOW_STATUS.PAUSED || wf.status === WORKFLOW_STATUS.CANCELLED) return { status: wf.status, workflowId };
+    if (Object.values(wf.stepStates).some(step => step.status !== STEP_STATUS.COMPLETED)) throw Error('workflow_incomplete_steps');
+    if (Object.values(wf.stepStates).some(step => (step.agent === 'tester' && step.testPassed !== true) || (step.agent === 'reviewer' && step.reviewerApproved !== true))) throw Error('workflow_verification_unconfirmed');
     wf.status = WORKFLOW_STATUS.COMPLETED;
     wf.completedAt = new Date().toISOString();
     saveWorkflow(wf, workspaceDir);

@@ -9,6 +9,14 @@ export function WorkflowTree(props) {
   const wf = () => props.workflow;
   const models = () => props.models || [];
   const checkpoints = () => props.checkpoints || [];
+  const stageStatus = (stage) => {
+    if (stage.agent) return wf()?.stepStates?.[stage.id]?.status || 'pending';
+    const states = (stage.steps || []).map(step => stageStatus(step));
+    if (states.includes('failed')) return 'failed';
+    if (states.length && states.every(status => status === 'completed')) return 'completed';
+    if (states.includes('running')) return 'running';
+    return 'pending';
+  };
 
   const toggleNode = (id) => {
     setCollapsedNodes(prev => {
@@ -202,8 +210,8 @@ export function WorkflowTree(props) {
                   <span class="wf-node-chevron" aria-hidden="true">
                     {isExpanded(stage.id || `stage-${stageIdx()}`) ? '▼' : '▶'}
                   </span>
-                  <span class={`wf-status-badge ${getStatusClass(stage.type === 'repeat' ? 'running' : 'completed')}`}>
-                    {getStatusIcon(stage.type === 'repeat' ? 'running' : 'completed')}
+                  <span class={`wf-status-badge ${getStatusClass(stageStatus(stage))}`}>
+                    {getStatusIcon(stageStatus(stage))}
                   </span>
                   <span class="wf-stage-title">{stage.title}</span>
                   <Show when={stage.type === 'repeat'}>

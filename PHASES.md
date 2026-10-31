@@ -1,5 +1,9 @@
 # Development phases
 
+## Phase 8 Integration Recovery & Hardening — 2026-11-01
+
+The status audit supersedes the earlier Phase 8 completion claims below. Phase 8 is partial; custom-runner and UI fixtures do not prove production OpenCode integration. Recovery checkpoint 1: local preservation baseline `21eacb4`, staged credential scan passed, private/generated evidence retained locally and excluded. Checkpoint 2: simulated success removed; timeout/provider/observation failures cannot complete steps; test/review prose cannot establish verification; completed steps cannot be retried; workflow completion requires all steps and explicit verification outcomes. Full suite **150/150** and production UI build pass. No live inference, packaging or publication. Security checkpoint 3 is next, followed by lifecycle integration, recovery/concurrency, attributed budgets, enforced roles and adversarial end-to-end validation. Each requires separate evidence.
+
 Updated 2026-10-29. This plan specifies completion gates, not fixed delivery promises. [PRD](PRD.md) defines scope; [architecture](ARCHITECTURE.md) defines ownership. Phases 1-4 and 0.5.0/0.5.1 are accepted development milestones. Phase 5.2 addresses release blockers; independent clean-machine, stability, licensing and human-accessibility gates remain open. See [current status](docs/STATUS.md), [MEMORY](MEMORY.md) and [Phase 5.2 evidence](validation/phase52/README.md).
 
 Phase 4's scoped static builder passes current-host acceptance and is approved. [Evidence](validation/phase4/README.md). Phase 5 is authorized and in progress; public-release gates below remain open. [Hardening evidence](validation/phase5/README.md), [release operations](docs/RELEASE.md).

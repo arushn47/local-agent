@@ -1,5 +1,7 @@
 # Current project status
 
+2026-11-01 recovery update: Phase 8 is **partially integrated**, despite the historical summaries. Local Git baseline `21eacb4` is preserved without secrets/installers/raw private evidence. False-success hardening passes **150/150** tests and production UI build. Missing executor, timeout/provider/observation failure and unverified test/review prose cannot produce success. Production lifecycle, security, recovery, attributed budgets and role enforcement remain recovery work. No live inference, packaging, publishing or remote push occurred. Phase 5 public-release gates remain open.
+
 Updated 2026-10-29. 0.5.1 is an accepted development milestone. Phase 5.2 produced an unsigned 0.5.2 development candidate; **public release remains blocked**. Owner now authorizes Phase 6 coding/context development; no new inference routes. See [focused audit](PHASE6-AUDIT.md).
 
 - Installer: **528,384,756 bytes**, down **21.57%** from 0.5.1. Payload: 19,215 files versus 65,534. Accepted 0.3/0.4/0.5.0/0.5.1 hashes are preserved.

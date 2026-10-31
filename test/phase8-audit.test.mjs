@@ -181,7 +181,7 @@ test('audit 2 & 3: runWorkflow executes parallel non-conflicting steps concurren
     const runner = async ({ step }) => {
       executionLogs.push({ stepId: step.id, timestamp: Date.now() });
       executedModels.push({ stepId: step.id, model: step.assignedModel, agent: step.agent });
-      return { output: `Completed ${step.id}` };
+      return { verified: true, output: `Completed ${step.id}` };
     };
 
     const outcome = await runWorkflow({
@@ -245,20 +245,20 @@ test('audit 4: runWorkflow executes bounded repeat loop with failure handoff and
         loopIterationCount += 1;
         if (loopIterationCount === 1) {
           // Iteration 1 fails tests
-          return { output: 'FAIL: AssertionError: result is false', testPassed: false };
+          return { verified: true, output: 'FAIL: AssertionError: result is false', testPassed: false };
         }
         // Iteration 2 passes tests
-        return { output: 'PASS: 15/15 tests passed', testPassed: true };
+        return { verified: true, output: 'PASS: 15/15 tests passed', testPassed: true };
       }
 
       if (step.id === 'review-criteria') {
         if (loopIterationCount === 1) {
-          return { output: 'Changes requested: Fix assertion failure', reviewerApproved: false };
+          return { verified: true, output: 'Changes requested: Fix assertion failure', reviewerApproved: false };
         }
-        return { output: 'Approved: Clean implementation', reviewerApproved: true };
+        return { verified: true, output: 'Approved: Clean implementation', reviewerApproved: true };
       }
 
-      return { output: 'Step completed' };
+      return { verified: true, output: 'Step completed (fixture)', testPassed: step.agent === 'tester' ? true : undefined };
     };
 
     const outcome = await runWorkflow({
@@ -300,9 +300,9 @@ test('audit 4b: repeat loop exhausts after maxIterations and halts workflow with
       if (step.id.includes('test')) {
         attempts += 1;
         // Tests always fail
-        return { output: 'FAIL: Continuous regression', testPassed: false };
+        return { verified: true, output: 'FAIL: Continuous regression', testPassed: false };
       }
-      return { output: 'Fix attempted' };
+      return { verified: true, output: 'Fix attempted' };
     };
 
     const outcome = await runWorkflow({
