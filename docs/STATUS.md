@@ -1,6 +1,6 @@
 # Current project status
 
-Latest recovery slice: supervised workflow lifecycle adapter passes 165/165, production build and isolated Phase 7/8/recovery browser checks. Production workflow activation remains gated pending exact models/role configuration, durable coordination and attributed guard accounting. No live inference, packaging or push.
+Latest recovery checkpoint: exact workflow aliases map to one provider/model with no fallback; six specialized native roles are installed with deny-first permissions. 168/168 regressions, UI build and all three browser checks pass. The actual pinned-engine registry probe passes without inference. Workflow egress is separate and rejects inference pending attribution. Production remains gated; durable coordination and budgets are next.
 
 Updated 2026-11-01. Phase 8 recovery checkpoints 1–3 have source/fixture acceptance: local Git baseline `21eacb4`, false-success fixes `d78ab90`, strict workflow API/state/snapshot validation and explicitly approved, content-bound checkpoint restoration. **156/156 tests**, production UI build and real authenticated browser restore checks pass. [Detailed evidence and remaining gates](phase8/RECOVERY.md).
 

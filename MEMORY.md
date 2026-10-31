@@ -1,6 +1,6 @@
 # Development memory
 
-Latest recovery checkpoint: supervised workflow session lifecycle is connected at adapter/fixture level (165/165, UI build and all three browser checks). Original session identity persists before dispatch; ambiguous restart never redispatches; tests require actual tool exit metadata. Next: exact models/installed roles, durable coordination and guard attribution. No live inference; production gate remains closed.
+Latest recovery checkpoint: exact workflow aliases map to one provider/model with no fallback; six specialized native roles are installed with deny-first permissions. 168/168 regressions, UI build and all three browser checks pass. The actual pinned-engine registry probe passes without inference. Workflow egress is separate and rejects inference pending attribution. Production remains gated; durable coordination and budgets are next.
 
 ## Authoritative recovery status — 2026-11-01
 

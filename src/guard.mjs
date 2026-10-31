@@ -45,15 +45,16 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       const b = await readBody(req);
       return send(res, 200, budgetLedger?.approveBudgetIncrease(b?.workflowId, b?.additionalAmountUsd));
     }
-    const match = path?.match(/^\/egress\/(gemini|groq|openrouter|ollama)\/v1\/(models|chat\/completions)$/);
+    const match = path?.match(/^\/(egress|workflow-egress)\/(gemini|groq|openrouter|ollama)\/v1\/(models|chat\/completions)$/);
     if (!match) return send(res, 404, { error: 'unknown_endpoint' });
-    const [, provider, endpoint] = match;
-    if (!tokenMatches(req.headers.authorization, `Bearer ${guardToken(secret, provider)}`)) return send(res, 401, { error: 'unauthorized' });
+    const [, route, provider, endpoint] = match;
+    if (!tokenMatches(req.headers.authorization, `Bearer ${guardToken(secret, route==='workflow-egress'?`workflow:${provider}`:provider)}`)) return send(res, 401, { error: 'unauthorized' });
     const discovered = catalog(); const credentials = env(); const entry = discovered.providers[provider];
     if (!entry?.enabled || !entry.allowed || !providerEligibility(provider, credentials).allowed) return send(res, 503, { error: { message: 'Provider is not admitted by LocalAgent policy', type: 'policy_blocked' } });
     if (provider !== 'ollama' && (!Number.isFinite(Date.parse(discovered.expiresAt)) || Date.parse(discovered.expiresAt) <= Date.now())) return send(res, 503, { error: { message: 'Refresh the expired cloud model catalog', type: 'policy_blocked' } });
     if (endpoint === 'models' && req.method === 'GET') return send(res, 200, { object: 'list', data: entry.models.map(id => ({ id, object: 'model', owned_by: provider, context_length: entry.capabilities?.[id]?.contextWindow || null, supported_parameters: ['tools'] })) });
     if (endpoint !== 'chat/completions' || req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
+    if(route==='workflow-egress')return send(res,403,{error:{code:'workflow_attribution_unavailable'}});
     
     const requestId = randomUUID(); let body;
     const policy = budgetLedger?.policy || 'free_only';

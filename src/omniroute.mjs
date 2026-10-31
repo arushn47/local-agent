@@ -5,6 +5,7 @@ import { omniRoot, stateDir, secrets, urls, requestJSON, guardToken } from './co
 import { compilePlan } from './routing.mjs';
 import { compactionSettings } from './context.mjs';
 import { toolOutputLimits } from './workspace/guidance.mjs';
+import { workflowCandidates } from './workspace/workflow-models.mjs';
 
 export async function management(config) {
   const { getCliToken, CLI_TOKEN_HEADER } = await import(pathToFileURL(join(omniRoot, 'bin/cli/utils/cliToken.mjs')).href);
@@ -48,6 +49,26 @@ export async function configureGateway(config, catalog, { managementAPI } = {}) 
   }
   const codingContext = codingCaps.length ? Math.min(...codingCaps) : 32768;
   const combos = list(await api('/api/combos'), 'combos');
+  const workflowModels={},workflowTargets=[];
+  for(const provider of config.routingOrder){
+    const candidates=workflowCandidates(config,catalog).filter(c=>c.provider===provider);
+    if(!candidates.length)continue;
+    const name=`LocalAgent Workflow ${provider}`,baseUrl=`${urls(config).guard}/workflow-egress/${provider}/v1`;
+    let node=nodes.find(n=>n.name===name);
+    if(!node){const data=await api('/api/provider-nodes',{method:'POST',body:{name,prefix:`localagent-workflow-${provider}`,apiType:'chat',type:'openai-compatible',baseUrl}});node=data.node||data;}
+    else if(node.baseUrl!==baseUrl)await api('/api/provider-nodes/'+node.id,{method:'PATCH',body:{baseUrl}});
+    let connection=connections.find(c=>c.name===name);
+    const body={provider:node.id,name,apiKey:guardToken(secret,`workflow:${provider}`),providerSpecificData:{baseUrl},defaultModel:candidates[0].model};
+    if(!connection){const data=await api('/api/providers',{method:'POST',body});connection=data.connection||data;}
+    else await api('/api/providers/'+connection.id,{method:'PATCH',body});
+    await api('/api/providers/'+connection.id+'/sync-models',{method:'POST',body:{}});
+    for(const candidate of candidates){
+      const existing=combos.find(c=>c.name===candidate.alias);
+      const target={model:qualifyModel(node.id,candidate.model),providerId:node.id,connectionId:connection.id};
+      await api(existing?'/api/combos/'+existing.id:'/api/combos',{method:existing?'PATCH':'POST',body:{name:candidate.alias,strategy:'priority',context_length:candidate.context,models:[target],config:{disableSessionStickiness:true}}});
+      workflowModels[candidate.qualified]=candidate;workflowTargets.push({...target,alias:candidate.alias});
+    }
+  }
   const existing = combos.find(c => c.name === 'localagent/coding');
   if(targets.length) await api(existing ? '/api/combos/' + existing.id : '/api/combos', { method: existing ? 'PATCH' : 'POST', body: { name: 'localagent/coding', strategy: 'priority', context_length: codingContext, models: targets, config: { disableSessionStickiness: false } } });
   else if(existing) await api('/api/combos/'+existing.id,{method:'DELETE'});
@@ -74,7 +95,8 @@ export async function configureGateway(config, catalog, { managementAPI } = {}) 
   const keys = list(await api('/api/keys'), 'keys');
   const keyMetadata = keys.find(k => k.name === 'LocalAgent OpenCode');
   if (!keyMetadata?.id) throw new Error('LocalAgent inference key metadata is missing');
-  await api('/api/keys/' + keyMetadata.id, { method: 'PATCH', body: { isActive: targets.length > 0, modelAccessMode: 'restricted', allowedModels: targets.map(t => t.model), allowedCombos: targets.length ? ['localagent/coding', ...Object.keys(routes).map(p => `localagent/check/${p}`)] : [], allowedConnections: [...new Set(targets.map(t => t.connectionId))], noLog: true } });
+  await api('/api/keys/' + keyMetadata.id, { method: 'PATCH', body: { isActive: targets.length+workflowTargets.length > 0, modelAccessMode: 'restricted', allowedModels: [...targets,...workflowTargets].map(t => t.model), allowedCombos: [...(targets.length ? ['localagent/coding', ...Object.keys(routes).map(p => `localagent/check/${p}`)] : []),...workflowTargets.map(t=>t.alias)], allowedConnections: [...new Set([...targets,...workflowTargets].map(t => t.connectionId))], noLog: true } });
+  writeFileSync(join(stateDir,'workflow-models.json'),JSON.stringify(workflowModels,null,2),{mode:0o600});
   writeFileSync(join(stateDir, 'routes.json'), JSON.stringify(routes, null, 2));
   writeFileSync(join(stateDir, 'route-plan.json'), JSON.stringify(plan, null, 2));
   // Upstream automatic compaction must fire before the guard's byte bound rejects
@@ -84,6 +106,7 @@ export async function configureGateway(config, catalog, { managementAPI } = {}) 
   // context. Upstream still saves the full text to disk with a marker.
   const toolOutput = toolOutputLimits(config.executionGuidance);
   const generated = { '$schema': 'https://opencode.ai/config.json', model: 'omniroute/localagent/coding', small_model: 'omniroute/localagent/coding', enabled_providers: ['omniroute'], autoupdate: false, share: 'disabled', ...(compaction ? { compaction } : {}), ...(toolOutput ? { tool_output: toolOutput } : {}), provider: { omniroute: { npm: '@ai-sdk/openai-compatible', name: 'LocalAgent', options: { baseURL: urls(config).gateway + '/v1', apiKey: '{env:LOCALAGENT_GATEWAY_KEY}', timeout: 600000 }, models: { 'localagent/coding': { name: 'LocalAgent free coding', tool_call: true, limit: { context: codingContext, output: config.outputTokens } } } } } };
+  for(const candidate of Object.values(workflowModels))generated.provider.omniroute.models[candidate.alias]={name:`LocalAgent exact ${candidate.qualified}`,tool_call:true,limit:{context:candidate.context,output:candidate.output}};
   writeFileSync(join(stateDir, 'opencode.json'), JSON.stringify(generated, null, 2));
   return { targets: plan.targets, excluded: plan.excluded, gateway: urls(config).gateway };
 }

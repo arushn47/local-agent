@@ -11,12 +11,12 @@ function fixture(t,scenario='pass') {
   const id='ses_fixture', model='gemini/gemini-2.5-flash';
   const session={
     create:async()=>({data:{id}}),
-    promptAsync:async input=>{prompts++;dispatchTime=Date.now();assert.equal(input.agent,'tester');assert.deepEqual(input.model,{providerID:'omniroute',modelID:model});assert.equal(input.tools.write,false);},
+    promptAsync:async input=>{prompts++;dispatchTime=Date.now();assert.equal(input.agent,'localagent-tester');assert.deepEqual(input.model,{providerID:'omniroute',modelID:model});assert.equal(input.tools.write,false);},
     messages:async()=>{if(scenario==='offline'&&prompts)throw Error('offline');return {data:prompts?[{info:{id:'msg_fixture',role:'assistant',time:{created:dispatchTime+1,completed:dispatchTime+2},finish:scenario==='length'?'length':'stop',...(scenario==='provider'?{error:{name:'RateLimit'}}:{})},parts:[{id:'tool_test',type:'tool',tool:'bash',state:{status:'completed',input:{command:scenario==='wrong-command'?'echo tests_pass':'node --test'},metadata:{exit:scenario==='failed-test'?1:0},output:'fixture-only'}},{type:'text',text:'APPROVED and all tests pass'}]}]:[]};},
     status:async()=>({data:scenario==='busy'?{[id]:{type:'retry'}}:{}}),
     diff:async()=>({data:[]}),abort:async()=>{aborts++;}
   };
-  const engine={forProject:()=>({session,permission:{list:async()=>({data:[{id:'perm_fixture',sessionID:id,permission:'bash',patterns:['node --test']}]}),reply:async()=>{replies++;}}})};
+  const engine={resolveWorkflowModel:()=>({providerID:'omniroute',modelID:model}),forProject:()=>({session,permission:{list:async()=>({data:[{id:'perm_fixture',sessionID:id,permission:'bash',patterns:['node --test']}]}),reply:async()=>{replies++;}}})};
   const projects={get:()=>({id:'project',path:dir})};
   const sessionFile=join(dir,'sessions.json');
   const tasks=createTasks(engine,projects,{sessionFile,deadlineMs:30,pollMs:2});

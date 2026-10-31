@@ -1,6 +1,6 @@
 # Development phases
 
-Recovery lifecycle adapter checkpoint: 165/165 regressions, production build and isolated Phase 7/8/recovery browser checks pass. Workflow sessions use the existing task supervisor, permission handling and abort path. Raw unsupervised dispatch was removed. Exact models/installed roles and cross-process recovery remain next; production activation stays gated.
+Latest recovery checkpoint: exact workflow aliases map to one provider/model with no fallback; six specialized native roles are installed with deny-first permissions. 168/168 regressions, UI build and all three browser checks pass. The actual pinned-engine registry probe passes without inference. Workflow egress is separate and rejects inference pending attribution. Production remains gated; durable coordination and budgets are next.
 
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 

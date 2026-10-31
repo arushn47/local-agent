@@ -348,12 +348,11 @@ export async function executeStep({
       modifiedFiles = res.modifiedFiles || [];
     } else if (tasks?.workflowStart && tasks?.workflowObserve && projectId) {
       if (!step.assignedModel) throw Error('workflow_exact_model_required');
-      const model = engine?.resolveWorkflowModel
-        ? engine.resolveWorkflowModel(step.assignedModel)
-        : { providerID: 'omniroute', modelID: step.assignedModel };
+      if(!engine?.resolveWorkflowModel)throw Error('workflow_model_registry_unavailable');
+      const model = engine.resolveWorkflowModel(step.assignedModel);
       const sessionID = await tasks.workflowStart({
         projectId, workflowId, stepId, attemptId: `${workflowId}-${stepId}-${step.attempts}`,
-        model, agent: step.agent, tools: workflowToolMask(step.agent), text: promptText, signal,
+        model, agent: `localagent-${step.agent}`, tools: workflowToolMask(step.agent), text: promptText, signal,
         beforeDispatch: async sessionID => {
           const current = loadWorkflow(workflowId, workspaceDir);
           if (current.status !== WORKFLOW_STATUS.RUNNING) throw Error('workflow_execution_interrupted');

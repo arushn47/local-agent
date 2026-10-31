@@ -1,6 +1,6 @@
 # LocalAgent architecture
 
-Workflow dispatch now uses createTasks workflowStart/workflowObserve, sharing progress limits, permission replies and abort. Original session identity is persisted before prompt dispatch; workflow sessions remain separate in navigation. Unsupervised direct polling was removed. Adapter tests and browser regressions pass (165/165); exact model configuration, durable coordination and guard attribution remain gated work.
+Latest recovery checkpoint: exact workflow aliases map to one provider/model with no fallback; six specialized native roles are installed with deny-first permissions. 168/168 regressions, UI build and all three browser checks pass. The actual pinned-engine registry probe passes without inference. Workflow egress is separate and rejects inference pending attribution. Production remains gated; durable coordination and budgets are next.
 
 2026-11-01: Phase 8 recovery checkpoints 1–3 are verified at source/fixture level. Production workflow execution is gated pending lifecycle, model, budget and role integration. See [recovery evidence](docs/phase8/RECOVERY.md). No release artifact was rebuilt.
 

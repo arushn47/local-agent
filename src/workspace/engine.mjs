@@ -1,17 +1,25 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2/client';
 import { loadConfig, opencodeExe, stateDir } from '../config.mjs';
 import { prepareGuidance } from './guidance.mjs';
 import {withoutWorkspaceAuthentication} from '../runtime-environment.mjs';
+import { workflowAgents, exactWorkflowModel } from './workflow-models.mjs';
+import { loadCatalog } from '../catalog.mjs';
 export async function startEngine({port=20144,profileName='opencode-profile',onChild=()=>{},signal} = {}) {
   const profile=join(stateDir,profileName);for(const p of ['config','data','cache'])mkdirSync(join(profile,p),{recursive:true});
   const config=JSON.parse(readFileSync(join(stateDir,'opencode.json')));
   config.permission={'*':'ask',glob:'allow',grep:'allow',list:'allow',read:{'*':'allow','**/.env*':'deny','**/credentials*':'deny','**/.localagent/**':'deny'},external_directory:'deny',webfetch:'deny',task:'deny',skill:'deny'};
   // Desktop state is outside .localagent, so protect its absolute subtree too.
   config.permission.read[stateDir.replaceAll('\\','/')+'/**']='deny';
+  config.agent={...(config.agent||{}),...workflowAgents(stateDir)};
+  // The pinned engine reads file-backed global configuration; its exported
+  // CONFIG_CONTENT flag has no loader consumer. Do not mistake env for proof.
+  writeFileSync(join(profile,'config','opencode.json'),JSON.stringify(config),{mode:0o600});
+  let workflowModels={};
+  try{workflowModels=JSON.parse(readFileSync(join(stateDir,'workflow-models.json'),'utf8'));}catch{}
   // Opt-in ambient guidance lives in the engine's global config directory, which
   // upstream reads as AGENTS.md. It adds no request and changes no permission.
   await prepareGuidance({profileDirectory:profile, enabled:loadConfig().executionGuidance===true});
@@ -23,6 +31,6 @@ export async function startEngine({port=20144,profileName='opencode-profile',onC
   try{
     let ready=false;for(let i=0;i<80;i++){signal?.throwIfAborted();if(child.exitCode!==null)throw Error('engine_exited');try{const r=await fetch(baseUrl+'/global/health',{headers,signal:AbortSignal.timeout(1000)});if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
     if(!ready)throw Error('engine_startup_timeout');
-    return {forProject:directory=>createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),stop:()=>child.kill(),child};
+    return {forProject:directory=>createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),resolveWorkflowModel:qualified=>exactWorkflowModel(qualified,workflowModels,loadCatalog()),stop:()=>child.kill(),child};
   }catch(e){child.kill();throw e;}
 }
