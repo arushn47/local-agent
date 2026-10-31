@@ -9,7 +9,7 @@ import { compilePlan } from '../routing.mjs';
 import { readEvents } from '../telemetry.mjs';
 import { providerEligibility } from '../policy.mjs';
 import { listProjectFiles, readProjectFile } from './project-files.mjs';
-import { listWorkflows, createWorkflowInstance, loadWorkflow, pauseWorkflow, resumeWorkflow, cancelWorkflow, retryStep, rollbackToCheckpoint, runWorkflow } from './workflow-engine.mjs';
+import { listWorkflows, createWorkflowInstance, loadWorkflow, pauseWorkflow, resumeWorkflow, cancelWorkflow, retryStep, rollbackToCheckpoint, runWorkflow, recoverWorkflow } from './workflow-engine.mjs';
 import { createPlan, validatePlan } from './planner.mjs';
 import { listTemplates } from './workflow-templates.mjs';
 import { getAllModels, validateModelAssignment } from './models.mjs';
@@ -111,7 +111,7 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           return send(res,201,instance);
         }
       }
-      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session))?$/);
+      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session|recover))?$/);
       if(wfAction){
         const prj=projects.get(wfAction[1]);const wfid=wfAction[2];const op=wfAction[3];
         if(op==='session'&&req.method==='GET'){
@@ -126,6 +126,7 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           const body=await json(req);
           if(!body || typeof body!=='object' || Array.isArray(body))throw Error('invalid_workflow_request');
           if(['resume','retry'].includes(op) && engine?.workflowReady!==true)return send(res,409,{error:'workflow_execution_not_ready'});
+          if(op==='recover')return send(res,200,await recoverWorkflow({workflowId:wfid,workspaceDir:prj.path,tasks}));
           if(op==='pause')return send(res,200,pauseWorkflow(wfid,prj.path));
           if(op==='resume'){const r=resumeWorkflow(wfid,prj.path);void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}
           if(op==='cancel')return send(res,200,cancelWorkflow(wfid,prj.path,body.reason));

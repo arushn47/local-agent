@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { ProgressBudget } from '../context.mjs';
 import { stateDir } from '../config.mjs';
 import { contextSummary } from './context-summary.mjs';
+import { acquireExecution } from './workflow-coordination.mjs';
 export function safeMessages(messages) {
   return messages.slice(-100).map(m=>({id:m.info?.id,role:m.info?.role,failed:!!m.info?.error,parts:(m.parts||[]).flatMap(p=>{
     if(p.type==='text'&&!p.synthetic)return [{type:'text',text:typeof p.text==='string'?p.text.slice(0,16000):''}];
@@ -24,15 +25,27 @@ export function toolChanges(messages) {
     return [];
   })).filter(d=>!/(^|[\\/])\.env/.test(d.file));
 }
-export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions.json'),deadlineMs=120000,pollMs=1000} = {}) {
+export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions.json'),deadlineMs=120000,pollMs=1000,coordinateProject=false} = {}) {
   const file=sessionFile;let sessions=existsSync(file)?JSON.parse(readFileSync(file)):[];
   const runs=new Map(),observations=new Map(),snapshots=new Map();let polling=false;
   const singleFlight=(map,id,fn)=>{if(map.has(id))return map.get(id);const pending=Promise.resolve().then(fn).finally(()=>map.delete(id));map.set(id,pending);return pending;};
-  const releaseRun=run=>{run.seen.clear();run.budget=null;clearTimeout(run.timer);run.timer=null;run.detach?.();};
+  const releaseRun=run=>{run.seen.clear();run.budget=null;clearTimeout(run.timer);run.timer=null;run.detach?.();run.release?.();run.release=null;};
   const save=()=>writeFileSync(file,JSON.stringify(sessions),{mode:0o600});
   const get=id=>{const s=sessions.find(s=>s.id===id);if(!s)throw Error('session_not_found');return s;};
   const client=s=>engine.forProject(projects.get(s.projectId).path);
-  const abort=async(id,code)=>{const s=get(id),run=runs.get(id);if(run){run.state=code;releaseRun(run);}await client(s).session.abort({sessionID:id}).catch(()=>{});};
+  const abort=async(id,code)=>{
+    const s=get(id),run=runs.get(id);if(run?.aborting)return run.aborting;
+    const pending=(async()=>{
+      const release=run?.release;if(run){run.release=null;run.state=code;releaseRun(run);}
+      try{
+        await client(s).session.abort({sessionID:id});
+        if(s.workflow){const states=(await client(s).session.status()).data;if(!states||['busy','retry'].includes(states[id]?.type))throw Error('not_quiescent');}
+        if(run)run.uncertain=false;
+        release?.();
+      }catch{if(run&&s.workflow)run.uncertain=true;}
+    })();
+    if(run)run.aborting=pending;await pending;if(run)run.aborting=null;
+  };
   const observe=s=>singleFlight(observations,s.id,async()=>{
     const c=client(s),response=await c.session.messages({sessionID:s.id,limit:100});const messages=response.data||[];
     if(s.workflow&&!Array.isArray(response.data))throw Error('workflow_observation_failed');
@@ -96,11 +109,20 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       return {state:run.state,sessionID:id,tools,messages:safeMessages(recent),modifiedFiles:toolChanges(recent).map(d=>d.file)};
     },
     workflowSession:id=>get(id).workflow,
+    workflowQuiescent:workflowId=>sessions.filter(s=>s.workflow?.workflowId===workflowId).every(s=>{const r=runs.get(s.id);return r&&!r.uncertain&&r.state!=='running'&&!r.aborting;}),
+    async workflowRecover(id){
+      const s=get(id);if(!s.workflow)throw Error('invalid_workflow_session');
+      const c=client(s);await c.session.abort({sessionID:id});
+      const states=(await c.session.status()).data;
+      if(!states||['busy','retry'].includes(states[id]?.type))throw Error('workflow_recovery_not_quiescent');
+      return {sessionID:id,state:'interrupted',replayed:false};
+    },
     async prompt(id,text){
       if(typeof text!=='string'||!text.trim()||text.length>16000)throw Error('invalid_prompt');
       if([...runs.values()].some(r=>r.state==='running'))throw Error('task_already_running');
       const s=get(id);s.title=text.slice(0,64);save();
       const run={state:'running',startedAt:Date.now(),seen:new Set(),budget:new ProgressBudget()};runs.set(id,run);
+      if(coordinateProject){try{run.release=acquireExecution(projects.get(s.projectId).path,'single-agent');}catch(error){runs.delete(id);throw error;}}
       run.timer=setTimeout(()=>void abort(id,'task_deadline_exceeded'),120000);
       try{await client(s).session.promptAsync({sessionID:id,model:{providerID:'omniroute',modelID:'localagent/coding'},parts:[{type:'text',text}]});}catch{await abort(id,'provider_error');throw Error('prompt_failed');}
     },

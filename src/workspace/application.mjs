@@ -24,7 +24,7 @@ export async function startWorkspace({ports={ui:20140,engine:20144,gateway:20151
     platform=await startPlatform(config,{onChild,onStage,onFailure:fail,signal:controller.signal});
     onStage('engine');engine=await startEngine({port:ports.engine,onChild,signal:controller.signal});
     engine.child.once('exit',()=>fail('engine_exited'));
-    const projects=projectStore();tasks=createTasks(engine,projects);controller.signal.throwIfAborted();
+    const projects=projectStore();tasks=createTasks(engine,projects,{coordinateProject:true});controller.signal.throwIfAborted();
     previews=await createPreviews({projects,directory:join(stateDir,'previews'),uiOrigin:'http://127.0.0.1:'+ports.ui,onChild});
     server=createWorkspaceServer({config,projects,tasks,credentials,previews,engine,port:ports.ui});
     await new Promise((r,j)=>{server.once('error',j);server.listen(ports.ui,'127.0.0.1',r);});

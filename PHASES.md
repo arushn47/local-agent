@@ -1,6 +1,6 @@
 # Development phases
 
-Latest recovery checkpoint: exact workflow aliases map to one provider/model with no fallback; six specialized native roles are installed with deny-first permissions. 168/168 regressions, UI build and all three browser checks pass. The actual pinned-engine registry probe passes without inference. Workflow egress is separate and rejects inference pending attribution. Production remains gated; durable coordination and budgets are next.
+Latest recovery checkpoint: 171/171 regressions, UI build and all three browser checks pass. File-backed project ownership coordinates runners/processes and single-agent dispatch; only read-only roles share parallel batches. Crashed leases require session abort/reconciliation; ambiguous retries and interrupted loops require review/replanning, never replay. Production remains gated. Attributed durable guard accounting is next.
 
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 

@@ -6,6 +6,7 @@ import { RepeatLoopEngine, LOOP_STATUS } from './repeat-loop.mjs';
 import { createCheckpoint, restoreCheckpoint, getCheckpoint, authorizeCheckpointRestore } from './checkpoints.mjs';
 import { buildRolePrompt, workflowToolMask } from './roles.mjs';
 import { validateModelAssignment, getModel } from './models.mjs';
+import { acquireExecution, executionOwner, ownerProcessAlive, releaseExecution, safeParallelBatches } from './workflow-coordination.mjs';
 
 const executions = new Map();
 const executionKey = (dir,id) => `${realpathSync(dir).toLowerCase()}:${id}`;
@@ -183,6 +184,7 @@ export function retryStep(workflowId, stepId, { alternateModelId = null, workspa
   if (!step) throw new Error(`step_not_found: ${stepId}`);
 
   if (step.status !== STEP_STATUS.FAILED) throw Error('workflow_retry_requires_failed_step');
+  if(step.sessionID||step.dispatchState==='dispatched')throw Error('workflow_retry_requires_reconciliation');
   step.status = STEP_STATUS.PENDING;
   step.error = null;
   if (alternateModelId) {
@@ -203,6 +205,9 @@ export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir, app
   if (!chk || chk.workflowId !== workflowId) throw Error('invalid_checkpoint_owner');
 
   authorizeCheckpointRestore({ workspaceDir, checkpointId, workflowId, approval });
+  if(executionOwner(workspaceDir))throw Error('invalid_checkpoint_active_workflow');
+  const release=acquireExecution(workspaceDir,workflowId);
+  try {
   // Restoration invalidates prior completion evidence. Preserve the historical
   // outcomes, but require a new reviewed plan instead of silently replaying it.
   wf.requiresReplan = true;
@@ -220,6 +225,25 @@ export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir, app
     restoredFiles: restoreRes.restoredFiles,
     removedFiles: restoreRes.removedFiles
   };
+  } finally {release();}
+}
+
+export async function recoverWorkflow({workflowId,workspaceDir,tasks}) {
+  const wf=loadWorkflow(workflowId,workspaceDir);if(!wf)throw Error('workflow_not_found');
+  if(executions.has(executionKey(workspaceDir,workflowId)))throw Error('workflow_runner_already_active');
+  const owner=executionOwner(workspaceDir);
+  if(owner&&(owner.workflowId!==workflowId||(owner.pid!==process.pid&&ownerProcessAlive(owner))))throw Error('workflow_execution_owner_active');
+  for(const step of Object.values(wf.stepStates)){
+    if(step.sessionID && step.status!==STEP_STATUS.COMPLETED){
+      if(!tasks?.workflowRecover)throw Error('workflow_recovery_supervisor_required');
+      await tasks.workflowRecover(step.sessionID);
+      step.status=STEP_STATUS.FAILED;step.error='workflow_interrupted_requires_review';step.dispatchState='interrupted';
+    }
+  }
+  wf.requiresReplan=true;wf.status=WORKFLOW_STATUS.PAUSED;
+  wf.recovery={at:new Date().toISOString(),replayed:false};saveWorkflow(wf,workspaceDir);
+  if(owner)releaseExecution(workspaceDir,owner.token);
+  return {status:wf.status,workflowId,replayed:false,requiresReplan:true};
 }
 
 
@@ -253,6 +277,7 @@ export async function executeStep({
       alreadyCompleted: true
     };
   }
+  if(step.sessionID||step.status===STEP_STATUS.RUNNING)throw Error('workflow_attempt_requires_recovery');
 
   // Check dependencies: ensure all predecessor steps in dependsOn are completed
   const flat = flattenSteps(wf.plan);
@@ -446,12 +471,16 @@ export async function executeStep({
 export async function runWorkflow(options) {
   const key=executionKey(options.workspaceDir,options.workflowId);
   if(executions.has(key))throw Error('workflow_runner_already_active');
+  const release=acquireExecution(options.workspaceDir,options.workflowId);
   const controller=new AbortController();
   const forward=()=>controller.abort();options.signal?.addEventListener('abort',forward,{once:true});
   if(options.signal?.aborted)controller.abort();
   executions.set(key,controller);
   try{return await runWorkflowBody({...options,signal:controller.signal});}
-  finally{executions.delete(key);options.signal?.removeEventListener('abort',forward);}
+  finally{
+    executions.delete(key);options.signal?.removeEventListener('abort',forward);
+    if(!options.tasks?.workflowQuiescent||options.tasks.workflowQuiescent(options.workflowId))release();
+  }
 }
 
 async function runWorkflowBody({
@@ -469,6 +498,8 @@ async function runWorkflowBody({
   let wf = loadWorkflow(workflowId, workspaceDir);
   if (!wf) throw new Error(`workflow_not_found: ${workflowId}`);
   if (wf.requiresReplan) throw Error('invalid_workflow_replan_required');
+  if(wf.status===WORKFLOW_STATUS.COMPLETED)return {status:wf.status,workflowId};
+  if(wf.status===WORKFLOW_STATUS.CANCELLED)throw Error('workflow_terminal_cancelled');
 
   wf.status = WORKFLOW_STATUS.RUNNING;
   if (!wf.startedAt) wf.startedAt = new Date().toISOString();
@@ -511,7 +542,7 @@ async function runWorkflowBody({
         }
       } else if (stage.type === 'parallel') {
         const steps = stage.steps || [];
-        const waves = cm.scheduleParallelBatches(steps);
+        const waves = safeParallelBatches(steps,cm);
 
         for (const wave of waves) {
           wf = loadWorkflow(workflowId, workspaceDir);
@@ -547,6 +578,10 @@ async function runWorkflowBody({
           }
         }
       } else if (stage.type === 'repeat') {
+        const durable=loadWorkflow(workflowId,workspaceDir);
+        durable.loopStates ||= {};
+        if(durable.loopStates[stage.id]?.status==='succeeded')continue;
+        if(durable.loopStates[stage.id]?.status==='running')throw Error('workflow_loop_requires_recovery');
         const repeatLoop = new RepeatLoopEngine({
           stageId: stage.id,
           title: stage.title,
@@ -554,6 +589,7 @@ async function runWorkflowBody({
           maxIterations: stage.maxIterations || 3,
           exitCondition: stage.exitCondition || 'tests_passed && reviewer_approved'
         });
+        repeatLoop.currentIteration=durable.loopStates[stage.id]?.iteration||0;
 
         let loopCompleted = false;
         let currentHandoff = null;
@@ -565,11 +601,16 @@ async function runWorkflowBody({
           }
 
           repeatLoop.startIteration();
+          wf.loopStates ||= {};
+          wf.loopStates[stage.id]={status:'running',iteration:repeatLoop.currentIteration};
 
           // Reset iteration steps to pending for re-run if iterating
           for (const s of stage.steps || []) {
             const stepState = wf.stepStates[s.id];
             if (stepState) {
+              if(stepState.sessionID)throw Error('workflow_loop_requires_review_before_new_attempt');
+              stepState.previousAttempts ||= [];
+              if(stepState.attempts)stepState.previousAttempts.push({status:stepState.status,attempt:stepState.attempts,testPassed:stepState.testPassed,error:stepState.error});
               stepState.status = STEP_STATUS.PENDING;
               stepState.error = null;
             }
@@ -613,6 +654,10 @@ async function runWorkflowBody({
           }
 
           const outcome = repeatLoop.completeIteration();
+          const loopWf=loadWorkflow(workflowId,workspaceDir);
+          loopWf.loopStates ||= {};
+          loopWf.loopStates[stage.id]={status:outcome.succeeded?'succeeded':outcome.exhausted?'exhausted':'pending',iteration:repeatLoop.currentIteration};
+          saveWorkflow(loopWf,workspaceDir);
           if (outcome.succeeded) {
             loopCompleted = true;
           } else if (outcome.exhausted) {
