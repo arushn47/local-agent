@@ -119,6 +119,12 @@ export function WorkflowTree(props) {
       console.error('Failed to restore checkpoint:', e);
     }
   };
+  const handlePermission = async (stepId, requestID, reply) => {
+    const session = wf()?.stepStates?.[stepId]?.sessionID;
+    if (!session) return;
+    try { await api(`sessions/${session}/permission`, { requestID, reply }); props.onRefresh?.(); }
+    catch { setActionError('The permission request could not be answered. Refresh the workflow and try again.'); }
+  };
 
   return (
     <div class="workflow-tree-card" role="region" aria-label="Workflow execution tree">
@@ -303,6 +309,13 @@ export function WorkflowTree(props) {
                             {/* Step Expanded Details */}
                             <Show when={isStepExpanded()}>
                               <div class="wf-step-details">
+                                <For each={props.sessions?.[step.id]?.permissions || []}>
+                                  {permission => <div role="group" aria-label="Workflow tool permission">
+                                    <p>{permission.permission}: {(permission.patterns || []).join(', ')}</p>
+                                    <button class="wf-btn" onClick={() => handlePermission(step.id, permission.id, 'once')}>Allow once</button>
+                                    <button class="wf-btn" onClick={() => handlePermission(step.id, permission.id, 'reject')}>Reject</button>
+                                  </div>}
+                                </For>
                                 <Show when={step.prompt}>
                                   <div class="wf-detail-row">
                                     <span class="wf-detail-label">Task:</span>

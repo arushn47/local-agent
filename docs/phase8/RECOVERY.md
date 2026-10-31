@@ -10,6 +10,12 @@ Updated 2026-11-01. This records source and fixture evidence, not production mul
 
 ## Final validation
 
+### Supervised lifecycle checkpoint — 2026-11-01
+
+Workflow sessions now enter the existing task supervisor, persist their original session/attempt before prompt dispatch, share progress/deadline checks, expose owned permissions, and propagate pause/cancel to session abort. Workflow sessions stay out of single-agent task navigation. The raw unsupervised workflow engine branch was removed. Test verification requires the exact declared command with completed tool results and exit zero; reviewer prose pauses for explicit review. Restarted/ambiguous sessions stop for recovery without redispatch. Same-process duplicate runners are rejected. Exact-model/role configuration and durable cross-process coordination are the next checkpoints, so production remains gated.
+
+Evidence: **165/165** regressions; production UI build; all three isolated Phase 7/8/recovery browser checks pass. `test/workflow-lifecycle.test.mjs` uses an explicit fake engine to exercise the adapter: success from tool metadata, provider errors, observation loss, retry/length states, wrong/failed commands, cancellation and restarted-supervisor non-replay. No live inference or claim of production path acceptance.
+
 | Check | Result |
 |---|---|
 | `npm test` | **156/156**, zero failures/skips; includes authenticated HTTP and temporary junction/hardlink fixtures outside the restricted sandbox. |

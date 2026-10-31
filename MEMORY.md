@@ -1,5 +1,7 @@
 # Development memory
 
+Latest recovery checkpoint: supervised workflow session lifecycle is connected at adapter/fixture level (165/165, UI build and all three browser checks). Original session identity persists before dispatch; ambiguous restart never redispatches; tests require actual tool exit metadata. Next: exact models/installed roles, durable coordination and guard attribution. No live inference; production gate remains closed.
+
 ## Authoritative recovery status — 2026-11-01
 
 Local baseline `21eacb4` preserves source/docs; credential scan passed, no push, private data/installers/raw evidence remain ignored locally. False-success checkpoint `d78ab90` passed 150/150 regressions and UI build. Security checkpoint now has 156/156 regressions, production UI build and a browser check using the actual authenticated restore API: dismiss preserves files, post-preview edits reject the entire preflight, explicit fresh approval restores and leaves a paused workflow requiring replanning.

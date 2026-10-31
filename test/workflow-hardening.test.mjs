@@ -37,7 +37,7 @@ test('OpenCode timeout, observation failure, provider error, and unverified test
     try {
       const result = await executeStep({ workflowId: f.wf.id, stepId: 'step-a', workspaceDir: f.dir, engine, executionTimeoutMs: 5, pollIntervalMs: 1 });
       assert.equal(result.status, 'failed', scenario);
-      if (scenario !== 'test-prose') assert.equal(aborted, 1);
+      assert.equal(aborted, 0, 'unregistered raw engine must never dispatch outside task supervision');
     } finally { f.cleanup(); }
   }
 });

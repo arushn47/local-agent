@@ -60,6 +60,14 @@ export function getRoleDefinition(roleId) {
   return ROLE_DEFINITIONS[roleId] || ROLE_DEFINITIONS.implementer;
 }
 
+// Message-level deny mask complements the installed agent permission rules.
+// Unknown/custom tools stay disabled; no task, web, skill or plugin escape.
+export function workflowToolMask(roleId) {
+  if (!Object.hasOwn(ROLE_DEFINITIONS, roleId)) throw Error('workflow_unknown_role');
+  const allowed = new Set(ROLE_DEFINITIONS[roleId].allowedTools);
+  return Object.fromEntries(['read','glob','grep','write','edit','apply_patch','bash','task','webfetch','websearch','skill','question','todowrite'].map(tool => [tool, allowed.has(tool)]));
+}
+
 export function formatHandoffContext({
   iteration = 1,
   previousRole = null,

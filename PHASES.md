@@ -1,5 +1,7 @@
 # Development phases
 
+Recovery lifecycle adapter checkpoint: 165/165 regressions, production build and isolated Phase 7/8/recovery browser checks pass. Workflow sessions use the existing task supervisor, permission handling and abort path. Raw unsupervised dispatch was removed. Exact models/installed roles and cross-process recovery remain next; production activation stays gated.
+
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 
 Phase 8 remains partial. Recovery checkpoints 1–3 have source/fixture evidence; checkpoints 4–9 remain open. Production workflow activation is blocked with `workflow_execution_not_ready` until the supervised execution and guard-attribution gates pass. Existing single-agent tasks remain available. No live inference, packaging, publishing or push.

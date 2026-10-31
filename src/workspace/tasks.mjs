@@ -24,17 +24,18 @@ export function toolChanges(messages) {
     return [];
   })).filter(d=>!/(^|[\\/])\.env/.test(d.file));
 }
-export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions.json')} = {}) {
+export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions.json'),deadlineMs=120000,pollMs=1000} = {}) {
   const file=sessionFile;let sessions=existsSync(file)?JSON.parse(readFileSync(file)):[];
   const runs=new Map(),observations=new Map(),snapshots=new Map();let polling=false;
   const singleFlight=(map,id,fn)=>{if(map.has(id))return map.get(id);const pending=Promise.resolve().then(fn).finally(()=>map.delete(id));map.set(id,pending);return pending;};
-  const releaseRun=run=>{run.seen.clear();run.budget=null;clearTimeout(run.timer);run.timer=null;};
+  const releaseRun=run=>{run.seen.clear();run.budget=null;clearTimeout(run.timer);run.timer=null;run.detach?.();};
   const save=()=>writeFileSync(file,JSON.stringify(sessions),{mode:0o600});
   const get=id=>{const s=sessions.find(s=>s.id===id);if(!s)throw Error('session_not_found');return s;};
   const client=s=>engine.forProject(projects.get(s.projectId).path);
   const abort=async(id,code)=>{const s=get(id),run=runs.get(id);if(run){run.state=code;releaseRun(run);}await client(s).session.abort({sessionID:id}).catch(()=>{});};
   const observe=s=>singleFlight(observations,s.id,async()=>{
     const c=client(s),response=await c.session.messages({sessionID:s.id,limit:100});const messages=response.data||[];
+    if(s.workflow&&!Array.isArray(response.data))throw Error('workflow_observation_failed');
     const run=runs.get(s.id);
     if(run?.state==='running'){
       for(const m of messages){
@@ -48,16 +49,53 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
           }
         }
       }
-      const statuses=(await c.session.status()).data||{};
-      if(run.state==='running'&&statuses[s.id]?.type!=='busy'&&statuses[s.id]?.type!=='retry'&&messages.some(m=>m.info?.role==='assistant'&&m.info.time?.completed>=run.startedAt&&m.info.finish&&m.info.finish!=='tool-calls')){run.state='completed';releaseRun(run);}
+      const statusResponse=await c.session.status();
+      if(s.workflow&&(!statusResponse.data||typeof statusResponse.data!=='object'))throw Error('workflow_observation_failed');
+      const statuses=statusResponse.data||{};
+      const terminal=messages.filter(m=>m.info?.role==='assistant'&&m.info.time?.created>=run.startedAt).at(-1);
+      const finished=s.workflow ? terminal?.info?.time?.completed>=run.startedAt&&terminal.info.finish==='stop'&&!terminal.info.error : messages.some(m=>m.info?.role==='assistant'&&m.info.time?.completed>=run.startedAt&&m.info.finish&&m.info.finish!=='tool-calls');
+      if(run.state==='running'&&statuses[s.id]?.type!=='busy'&&statuses[s.id]?.type!=='retry'&&finished){run.state='completed';releaseRun(run);}
     }
     return messages;
   });
-  const interval=setInterval(async()=>{if(polling)return;polling=true;try{for(const s of sessions)if(runs.get(s.id)?.state==='running')await observe(s);}catch{}finally{polling=false;}},1000);
+  const interval=setInterval(async()=>{if(polling)return;polling=true;try{for(const s of sessions)if(runs.get(s.id)?.state==='running')await observe(s);}catch{}finally{polling=false;}},pollMs);
   return {
-    list:projectId=>sessions.filter(s=>s.projectId===projectId),
+    list:projectId=>sessions.filter(s=>s.projectId===projectId&&!s.workflow),
     active:projectId=>sessions.some(s=>s.projectId===projectId&&runs.get(s.id)?.state==='running'),
     async create(projectId){const project=projects.get(projectId);const data=(await engine.forProject(project.path).session.create({title:'New task'})).data;if(!data?.id)throw Error('session_creation_failed');const s={id:data.id,projectId,title:'New task'};sessions=[s,...sessions];save();return s;},
+    async workflowStart({projectId,workflowId,stepId,attemptId,model,agent,tools,text,beforeDispatch,signal}) {
+      if(signal?.aborted)throw Error('workflow_cancelled');
+      if(sessions.some(s=>s.workflow?.attemptId===attemptId))throw Error('workflow_attempt_already_registered');
+      if(sessions.some(s=>!s.workflow&&runs.get(s.id)?.state==='running'))throw Error('task_already_running');
+      const c=engine.forProject(projects.get(projectId).path);
+      const data=(await c.session.create({title:`[${agent}] ${stepId}`})).data;
+      if(!data?.id)throw Error('workflow_session_creation_failed');
+      const s={id:data.id,projectId,title:stepId,workflow:{workflowId,stepId,attemptId,model,agent}};
+      sessions=[s,...sessions];save();
+      // The workflow records the original session before a request can have
+      // side effects. A failed/ambiguous dispatch is never retried here.
+      await beforeDispatch(s.id);
+      if(signal?.aborted)throw Error('workflow_cancelled');
+      const run={state:'running',startedAt:Date.now(),seen:new Set(),budget:new ProgressBudget()};runs.set(s.id,run);
+      run.timer=setTimeout(()=>void abort(s.id,'task_deadline_exceeded'),Math.min(deadlineMs,120000));
+      const onAbort=()=>void abort(s.id,'cancelled');signal?.addEventListener('abort',onAbort,{once:true});
+      run.detach=()=>signal?.removeEventListener('abort',onAbort);
+      try { await c.session.promptAsync({sessionID:s.id,agent,model,tools,parts:[{type:'text',text}]}); }
+      catch { await abort(s.id,'provider_error'); throw Error('workflow_dispatch_ambiguous'); }
+      return s.id;
+    },
+    async workflowObserve(id) {
+      const s=get(id);if(!s.workflow)throw Error('invalid_workflow_session');
+      let messages;
+      try{messages=await observe(s);}catch{await abort(id,'observation_failed');throw Error('workflow_observation_failed');}
+      const run=runs.get(id);
+      // A restarted supervisor cannot infer success from an old final message.
+      if(!run)return {state:'recovery_required',sessionID:id};
+      const recent=messages.filter(m=>m.info?.time?.created>=run.startedAt);
+      const tools=recent.flatMap(m=>(m.parts||[]).filter(p=>p.type==='tool').map(p=>({id:p.id,tool:p.tool,status:p.state?.status,exit:p.state?.metadata?.exit,command:p.state?.input?.command})));
+      return {state:run.state,sessionID:id,tools,messages:safeMessages(recent),modifiedFiles:toolChanges(recent).map(d=>d.file)};
+    },
+    workflowSession:id=>get(id).workflow,
     async prompt(id,text){
       if(typeof text!=='string'||!text.trim()||text.length>16000)throw Error('invalid_prompt');
       if([...runs.values()].some(r=>r.state==='running'))throw Error('task_already_running');
@@ -85,6 +123,6 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
     }),
     async permission(id,requestID,reply){const s=get(id);if(!['once','reject'].includes(reply))throw Error('invalid_permission_reply');const c=client(s);const pending=(await c.permission.list()).data||[];if(!pending.some(p=>p.id===requestID&&p.sessionID===id))throw Error('permission_not_found');await c.permission.reply({requestID,reply});},
     cancel:id=>abort(id,'cancelled'),
-    stop(){clearInterval(interval);for(const run of runs.values())clearTimeout(run.timer);},
+    stop(){clearInterval(interval);for(const [id,run] of runs){clearTimeout(run.timer);run.detach?.();if(run.state==='running')void abort(id,'supervisor_stopped');}},
   };
 }

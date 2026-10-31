@@ -9,6 +9,7 @@ export function WorkflowsPanel(props) {
   const [templates, setTemplates] = createSignal([]);
   const [models, setModels] = createSignal([]);
   const [checkpoints, setCheckpoints] = createSignal([]);
+  const [stepSessions, setStepSessions] = createSignal({});
   const [loading, setLoading] = createSignal(false);
   const [showNewModal, setShowNewModal] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal('');
@@ -54,6 +55,11 @@ export function WorkflowsPanel(props) {
       ]);
       setSelectedWorkflow(wfDetail);
       setCheckpoints(chkList || []);
+      const pairs = await Promise.all(Object.values(wfDetail.stepStates || {}).filter(step => step.sessionID).map(async step => {
+        try { return [step.id, await api(`projects/${projectId()}/workflows/${wfid}/session?stepId=${encodeURIComponent(step.id)}`)]; }
+        catch { return [step.id, null]; }
+      }));
+      setStepSessions(Object.fromEntries(pairs));
     } catch (e) {
       console.error('Failed to load workflow details:', e);
     }
@@ -151,6 +157,7 @@ export function WorkflowsPanel(props) {
             workflow={selectedWorkflow()}
             models={models()}
             checkpoints={checkpoints()}
+            sessions={stepSessions()}
             projectId={projectId()}
             onRefresh={loadData}
           />

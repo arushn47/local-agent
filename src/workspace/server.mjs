@@ -107,22 +107,29 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           // guard attribution integration has independently passed its gates.
           if(body.autoStart!==false && engine?.workflowReady!==true) return send(res,409,{error:'workflow_execution_not_ready'});
           const instance=createWorkflowInstance({plan,workspaceDir:prj.path});
-          if(body.autoStart!==false){void runWorkflow({workflowId:instance.id,workspaceDir:prj.path,engine,tasks,catalog}).catch(()=>{});}
+          if(body.autoStart!==false){void runWorkflow({workflowId:instance.id,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog}).catch(()=>{});}
           return send(res,201,instance);
         }
       }
-      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview))?$/);
+      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session))?$/);
       if(wfAction){
         const prj=projects.get(wfAction[1]);const wfid=wfAction[2];const op=wfAction[3];
+        if(op==='session'&&req.method==='GET'){
+          const wf=loadWorkflow(wfid,prj.path),step=wf?.stepStates?.[url.searchParams.get('stepId')];
+          if(!step?.sessionID)throw Error('invalid_workflow_session');
+          const owner=tasks.workflowSession(step.sessionID);
+          if(owner?.workflowId!==wfid||owner?.stepId!==step.id)throw Error('invalid_workflow_session');
+          return send(res,200,await tasks.snapshot(step.sessionID));
+        }
         if(!op&&req.method==='GET'){const wf=loadWorkflow(wfid,prj.path);if(!wf)return send(res,404,{error:'workflow_not_found'});return send(res,200,wf);}
         if(req.method==='POST'){
           const body=await json(req);
           if(!body || typeof body!=='object' || Array.isArray(body))throw Error('invalid_workflow_request');
           if(['resume','retry'].includes(op) && engine?.workflowReady!==true)return send(res,409,{error:'workflow_execution_not_ready'});
           if(op==='pause')return send(res,200,pauseWorkflow(wfid,prj.path));
-          if(op==='resume'){const r=resumeWorkflow(wfid,prj.path);void runWorkflow({workflowId:wfid,workspaceDir:prj.path,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}
+          if(op==='resume'){const r=resumeWorkflow(wfid,prj.path);void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}
           if(op==='cancel')return send(res,200,cancelWorkflow(wfid,prj.path,body.reason));
-          if(op==='retry'){const wf=loadWorkflow(wfid,prj.path);const step=wf?.stepStates?.[body.stepId];if(!step)throw Error('invalid_workflow_step');if(body.alternateModelId&&!validateModelAssignment({catalog:loadCatalog(),modelId:body.alternateModelId,role:step.agent,policy:wf.policy}).valid)throw Error('invalid_workflow_model');const r=retryStep(wfid,body.stepId,{alternateModelId:body.alternateModelId,workspaceDir:prj.path});void runWorkflow({workflowId:wfid,workspaceDir:prj.path,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}
+          if(op==='retry'){const wf=loadWorkflow(wfid,prj.path);const step=wf?.stepStates?.[body.stepId];if(!step)throw Error('invalid_workflow_step');if(body.alternateModelId&&!validateModelAssignment({catalog:loadCatalog(),modelId:body.alternateModelId,role:step.agent,policy:wf.policy}).valid)throw Error('invalid_workflow_model');const r=retryStep(wfid,body.stepId,{alternateModelId:body.alternateModelId,workspaceDir:prj.path});void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}
           if(op==='rollback-preview'){const wf=loadWorkflow(wfid,prj.path);if(!wf)throw Error('invalid_workflow_identifier');if(wf.status==='running'||tasks.active(prj.id))throw Error('invalid_checkpoint_active_workflow');return send(res,200,previewCheckpointRestore({workspaceDir:prj.path,checkpointId:body.checkpointId,workflowId:wfid}));}
           if(op==='rollback'){if(tasks.active(prj.id))throw Error('invalid_checkpoint_active_workflow');return send(res,200,rollbackToCheckpoint(wfid,body.checkpointId,prj.path,body.approval));}
         }

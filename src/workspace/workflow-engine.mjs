@@ -1,11 +1,14 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import { flattenSteps, validatePlan } from './planner.mjs';
 import { assertWorkflowId, stateDirectory, writeState, readState } from './workflow-storage.mjs';
 import { ConflictMatrix } from './conflict-matrix.mjs';
 import { RepeatLoopEngine, LOOP_STATUS } from './repeat-loop.mjs';
 import { createCheckpoint, restoreCheckpoint, getCheckpoint, authorizeCheckpointRestore } from './checkpoints.mjs';
-import { buildRolePrompt } from './roles.mjs';
+import { buildRolePrompt, workflowToolMask } from './roles.mjs';
 import { validateModelAssignment, getModel } from './models.mjs';
+
+const executions = new Map();
+const executionKey = (dir,id) => `${realpathSync(dir).toLowerCase()}:${id}`;
 
 export const WORKFLOW_STATUS = Object.freeze({
   PENDING: 'pending',
@@ -145,6 +148,7 @@ export function pauseWorkflow(workflowId, workspaceDir) {
   }
   wf.status = WORKFLOW_STATUS.PAUSED;
   saveWorkflow(wf, workspaceDir);
+  executions.get(executionKey(workspaceDir,workflowId))?.abort();
   return { success: true, workflowId, status: wf.status };
 }
 
@@ -155,6 +159,7 @@ export function resumeWorkflow(workflowId, workspaceDir) {
     throw new Error(`workflow_not_paused: ${wf.status}`);
   }
   if (wf.requiresReplan) throw Error('invalid_workflow_replan_required');
+  if (executions.has(executionKey(workspaceDir,workflowId))) throw Error('workflow_runner_still_stopping');
   wf.status = WORKFLOW_STATUS.RUNNING;
   saveWorkflow(wf, workspaceDir);
   return { success: true, workflowId, status: wf.status };
@@ -167,6 +172,7 @@ export function cancelWorkflow(workflowId, workspaceDir, reason = 'user_cancelle
   wf.completedAt = new Date().toISOString();
   wf.cancellationReason = reason;
   saveWorkflow(wf, workspaceDir);
+  executions.get(executionKey(workspaceDir,workflowId))?.abort();
   return { success: true, workflowId, status: wf.status, reason };
 }
 
@@ -222,6 +228,8 @@ export async function executeStep({
   stepId,
   workspaceDir,
   engine = null,
+  projectId = null,
+  signal = null,
   tasks = null,
   budgetLedger = null,
   catalog = null,
@@ -338,57 +346,45 @@ export async function executeStep({
       testPassed = res.testPassed ?? null;
       reviewerApproved = res.reviewerApproved ?? null;
       modifiedFiles = res.modifiedFiles || [];
-    } else if (engine) {
-      // Genuine OpenCode invocation!
-      const client = engine.forProject(workspaceDir);
-      const sessionData = (await client.session.create({ title: `[${step.agent}] ${step.title}` })).data;
-      const sessionID = sessionData.id;
-      if (!sessionID) throw Error('workflow_session_creation_failed');
-      const assignedModel = step.assignedModel || 'localagent/coding';
-
-      await client.session.promptAsync({
-        sessionID,
-        agent: step.agent,
-        model: {
-          providerID: 'omniroute',
-          modelID: assignedModel
-        },
-        parts: [{ type: 'text', text: promptText }]
-      });
-
-      // Bounded poll for completion
-      let completed = false;
-      const startPoll = Date.now();
-      try {
-      while (!completed && (Date.now() - startPoll < Math.min(executionTimeoutMs, 120000))) {
-        await new Promise(r => setTimeout(r, pollIntervalMs));
-        const control = loadWorkflow(workflowId, workspaceDir);
-        if (control.status !== WORKFLOW_STATUS.RUNNING && control.status !== WORKFLOW_STATUS.PENDING) throw Error('workflow_execution_interrupted');
-        const statusRes = (await client.session.status()).data;
-        const msgRes = (await client.session.messages({ sessionID, limit: 100 })).data;
-        if (!statusRes || !Array.isArray(msgRes)) throw Error('workflow_observation_unavailable');
-
-        const lastMsg = msgRes.filter(m => m.info?.role === 'assistant').at(-1);
-        if (lastMsg?.info?.error) throw Error('workflow_provider_error');
-        if (!['busy', 'retry'].includes(statusRes[sessionID]?.type) && lastMsg?.info?.time?.completed && lastMsg.info.finish === 'stop') {
-          completed = true;
-          executionOutput = lastMsg.parts?.filter(p => p.type === 'text').map(p => p.text).join('\n') || '';
+    } else if (tasks?.workflowStart && tasks?.workflowObserve && projectId) {
+      if (!step.assignedModel) throw Error('workflow_exact_model_required');
+      const model = engine?.resolveWorkflowModel
+        ? engine.resolveWorkflowModel(step.assignedModel)
+        : { providerID: 'omniroute', modelID: step.assignedModel };
+      const sessionID = await tasks.workflowStart({
+        projectId, workflowId, stepId, attemptId: `${workflowId}-${stepId}-${step.attempts}`,
+        model, agent: step.agent, tools: workflowToolMask(step.agent), text: promptText, signal,
+        beforeDispatch: async sessionID => {
+          const current = loadWorkflow(workflowId, workspaceDir);
+          if (current.status !== WORKFLOW_STATUS.RUNNING) throw Error('workflow_execution_interrupted');
+          current.stepStates[stepId].sessionID = sessionID;
+          current.stepStates[stepId].dispatchState = 'dispatched';
+          saveWorkflow(current, workspaceDir);
         }
+      });
+      let observed;
+      const started = Date.now();
+      do {
+        if (signal?.aborted) { await tasks.cancel(sessionID); throw Error('workflow_execution_interrupted'); }
+        observed = await tasks.workflowObserve(sessionID);
+        if (observed.state !== 'running') break;
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+      } while (Date.now() - started < Math.min(executionTimeoutMs, 120000));
+      if (observed?.state !== 'completed') {
+        await tasks.cancel(sessionID);
+        throw Error(observed?.state === 'running' ? 'workflow_execution_timeout' : `workflow_${observed?.state || 'observation_failed'}`);
       }
-      if (!completed) throw Error('workflow_execution_timeout');
-      } catch (error) {
-        await client.session.abort({ sessionID }).catch(() => {});
-        throw error;
+      executionOutput = observed.messages.flatMap(m=>m.parts).filter(p=>p.type==='text').map(p=>p.text).join('\n').slice(-16000);
+      modifiedFiles = observed.modifiedFiles;
+      if (observed.tools.some(t=>t.status!=='completed')) throw Error('workflow_tool_failed');
+      if (step.agent === 'tester') {
+        const expected = planStep.testCommand;
+        const results = observed.tools.filter(t=>t.tool==='bash');
+        if (!expected || !results.length || !results.some(t=>t.command===expected)) throw Error('workflow_tests_unverified');
+        testPassed = results.every(t=>t.status==='completed' && t.exit===0);
       }
-
-      try {
-        const diffRes = (await client.session.diff({ sessionID })).data || [];
-        modifiedFiles = diffRes.map(d => d.file);
-      } catch {}
-
-      // Text is not a test result or review approval. Lifecycle integration
-      // must supply independently verifiable outcomes before these roles pass.
-      if (step.agent === 'tester' || step.agent === 'reviewer') throw Error('workflow_verification_unavailable');
+      // Human review approval is intentionally not derived from a model reply.
+      if (step.agent === 'reviewer') throw Error('workflow_review_required');
     } else {
       throw Error('workflow_executor_unavailable');
     }
@@ -407,12 +403,13 @@ export async function executeStep({
 
   if (executionError) {
     latestStep.status = STEP_STATUS.FAILED;
-    latestStep.error = executionError.message || String(executionError);
+    latestStep.error = /^workflow_[a-z_]+$/.test(executionError.message) ? executionError.message : 'workflow_execution_failed';
     latestStep.completedAt = Date.now();
     latestStep.durationMs = latestStep.completedAt - latestStep.startedAt;
     latestStep.output = executionOutput;
     latestStep.testPassed = testPassed;
     latestStep.reviewerApproved = reviewerApproved;
+    if (latestStep.error === 'workflow_review_required') latestWf.status = WORKFLOW_STATUS.PAUSED;
     saveWorkflow(latestWf, workspaceDir);
     return {
       status: STEP_STATUS.FAILED,
@@ -432,7 +429,7 @@ export async function executeStep({
   latestStep.testPassed = testPassed;
   latestStep.reviewerApproved = reviewerApproved;
   latestStep.modifiedFiles = modifiedFiles;
-  latestStep.evidenceSource = runner ? 'custom_runner' : 'opencode_session';
+  latestStep.evidenceSource = runner ? 'custom_runner' : 'supervised_opencode_session';
 
   saveWorkflow(latestWf, workspaceDir);
 
@@ -447,10 +444,23 @@ export async function executeStep({
   };
 }
 
-export async function runWorkflow({
+export async function runWorkflow(options) {
+  const key=executionKey(options.workspaceDir,options.workflowId);
+  if(executions.has(key))throw Error('workflow_runner_already_active');
+  const controller=new AbortController();
+  const forward=()=>controller.abort();options.signal?.addEventListener('abort',forward,{once:true});
+  if(options.signal?.aborted)controller.abort();
+  executions.set(key,controller);
+  try{return await runWorkflowBody({...options,signal:controller.signal});}
+  finally{executions.delete(key);options.signal?.removeEventListener('abort',forward);}
+}
+
+async function runWorkflowBody({
   workflowId,
   workspaceDir,
   engine = null,
+  projectId = null,
+  signal = null,
   tasks = null,
   budgetLedger = null,
   catalog = null,
@@ -482,6 +492,8 @@ export async function runWorkflow({
           stepId,
           workspaceDir,
           engine,
+          projectId,
+          signal,
           tasks,
           budgetLedger,
           catalog,
@@ -489,6 +501,8 @@ export async function runWorkflow({
           runner
         });
 
+        const control = loadWorkflow(workflowId, workspaceDir);
+        if (['paused','cancelled'].includes(control.status)) return {status:control.status,workflowId};
         if (res.status === STEP_STATUS.FAILED) {
           wf = loadWorkflow(workflowId, workspaceDir);
           wf.status = WORKFLOW_STATUS.FAILED;
@@ -512,6 +526,8 @@ export async function runWorkflow({
               stepId: s.id,
               workspaceDir,
               engine,
+              projectId,
+              signal,
               tasks,
               budgetLedger,
               catalog,
@@ -520,6 +536,8 @@ export async function runWorkflow({
             }))
           );
 
+          const control = loadWorkflow(workflowId, workspaceDir);
+          if (['paused','cancelled'].includes(control.status)) return {status:control.status,workflowId};
           const failed = results.find(r => r.status === STEP_STATUS.FAILED);
           if (failed) {
             wf = loadWorkflow(workflowId, workspaceDir);
@@ -565,6 +583,8 @@ export async function runWorkflow({
               stepId: s.id,
               workspaceDir,
               engine,
+              projectId,
+              signal,
               tasks,
               budgetLedger,
               catalog,
@@ -573,6 +593,8 @@ export async function runWorkflow({
               handoffContext: currentHandoff
             });
 
+            const control = loadWorkflow(workflowId, workspaceDir);
+            if (['paused','cancelled'].includes(control.status)) return {status:control.status,workflowId};
             repeatLoop.recordStepOutcome(s.id, {
               output: res.output,
               error: res.error,
@@ -618,7 +640,7 @@ export async function runWorkflow({
     return { status: WORKFLOW_STATUS.COMPLETED, workflowId };
   } catch (err) {
     wf = loadWorkflow(workflowId, workspaceDir);
-    if (wf) {
+    if (wf && !['cancelled','paused'].includes(wf.status)) {
       wf.status = WORKFLOW_STATUS.FAILED;
       wf.cancellationReason = err.message || String(err);
       saveWorkflow(wf, workspaceDir);

@@ -1,5 +1,7 @@
 # LocalAgent architecture
 
+Workflow dispatch now uses createTasks workflowStart/workflowObserve, sharing progress limits, permission replies and abort. Original session identity is persisted before prompt dispatch; workflow sessions remain separate in navigation. Unsupervised direct polling was removed. Adapter tests and browser regressions pass (165/165); exact model configuration, durable coordination and guard attribution remain gated work.
+
 2026-11-01: Phase 8 recovery checkpoints 1–3 are verified at source/fixture level. Production workflow execution is gated pending lifecycle, model, budget and role integration. See [recovery evidence](docs/phase8/RECOVERY.md). No release artifact was rebuilt.
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.
