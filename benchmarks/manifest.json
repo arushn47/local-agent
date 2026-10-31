@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "fixtures": {
+    "env-parse": {
+      "task": "df02ac0012e06a536e67d3fc86cfe782aec18d72201acff7a00131125332680c",
+      "repo": {
+        "parse.mjs": "f40a7b03b10fae39b05470e8dfb153170c6c15615f7358e7757de35c84c53ed2"
+      },
+      "checks": {
+        "acceptance.test.mjs": "cc08ee9b7b925c5b3b62280639f4f1726e7ebef4904f2933a7c95390d5411e1a"
+      },
+      "solution": {
+        "parse.mjs": "5211c827ad3854ed456292f4489299987d83dd6356b9aa630b19d6775b93a662"
+      }
+    },
+    "long-context": {
+      "task": "de94a6389382c2562c953b4f40e39b617568aec8461ea1bc9124be9c0afdd558",
+      "repo": {
+        "amount.mjs": "7b2bd9612814db76f17e096fab127e1507d16b2badb81027c3240dae87425cc2",
+        "history.md": "d5937f47710c5dfcccdd6693ab379869da3bdda49e300cc064c47d8d362f262b"
+      },
+      "checks": {
+        "acceptance.test.mjs": "c9a7f007e1e12855efa052648146cc3ddc39e0ec612378cae571f27c4eea99a4"
+      },
+      "solution": {
+        "amount.mjs": "f96cef7dd06d237d19d518ef5444b3fe80ff139876505c3ccba6e80838624025"
+      }
+    },
+    "off-by-one": {
+      "task": "a38e172296682efdec755b4af8db68376a372389651f8449a97eac05c36c9542",
+      "repo": {
+        "range.mjs": "308a4a685831a5cbb02e38fd926a4822ded19240d884cb9c08696adf9f4d1dd4"
+      },
+      "checks": {
+        "acceptance.test.mjs": "11acb31fc069645ed33ba8be7ea85724cb25d6916580f49a6ac5e57ee6ed3a71"
+      },
+      "solution": {
+        "range.mjs": "5f00d2e6f6e8d4c58d5099441ca360b5681f866b99ad1481cfbcde8c91b2412b"
+      }
+    },
+    "refactor-move": {
+      "task": "a34d0849b5204284abe2fd9cbb95ffe63583cd7fdccabdd6ffecd14b80ffb234",
+      "repo": {
+        "index.mjs": "bd3186cf5be95cedc6524b9d712767c7a0a18bb03163047f57334560f6fd59e5",
+        "math.mjs": "abaa2551d731fdb602a37aa854d77fd1204be9418ea296e74061f49844df4c8a"
+      },
+      "checks": {
+        "acceptance.test.mjs": "a457f3e699c02a54750f9eef48eb4cd8289f83484467c6eb3fd001f61fa86f39"
+      },
+      "solution": {
+        "clamp.mjs": "2866677a4450ab1204005da2ab0cf28e203a590b16a8755ec0f867c295ca0827",
+        "index.mjs": "9d913e3a2b538fe27b8096abbc9f00e7c79fe73c0f48345115bc89ca300a7195",
+        "math.mjs": "4a381860447226426a116b024081641b32f9b6c4f7c2c5d3cb86987e85c8ae33"
+      }
+    },
+    "slugify": {
+      "task": "4fb9656e4983041982b4905afe3be0dd14e7cd006d80b782abdc27022fec9685",
+      "repo": {
+        "slug.mjs": "7d9dfcef0ac827fb6fbe55ffde28b571ec6d531a6f182dd274487c033241905c"
+      },
+      "checks": {
+        "acceptance.test.mjs": "dabf9ea39401bbe04161f4699693195d2bd8c05b3f4d2200826e4ad2440a94dd"
+      },
+      "solution": {
+        "slug.mjs": "0d7ef36b36deadf151db8fe5b553b6439bc7947007e59fadc595581dd34721d0"
+      }
+    }
+  }
+}

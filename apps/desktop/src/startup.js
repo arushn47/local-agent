@@ -1,0 +1,4 @@
+const stages={starting:'Starting your local runtime…',credentials:'Unlocking protected local connections…',runtime_readiness:'Starting the local gateway…',catalog_discovery:'Checking provider availability…',authentication_and_configuration:'Applying guarded routing configuration…',engine:'Starting the coding engine…',ready:'Opening your workspace…',stopping:'Stopping owned services…',failed:'Startup stopped. Your projects and protected connections are preserved. Check that this installation is complete, then retry.'};
+function update(s){document.getElementById('stage').textContent=stages[s.stage]||stages.starting;document.getElementById('retry').hidden=s.state!=='failed';}
+window.localagentDesktop.onStatus(update);window.localagentDesktop.status().then(update);
+document.getElementById('retry').addEventListener('click',()=>{document.getElementById('retry').hidden=true;void window.localagentDesktop.restart();});

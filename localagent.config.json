@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "gatewayPort": 20141,
+  "guardPort": 20142,
+  "contextTokens": 8192,
+  "outputTokens": 1800,
+  "providers": {
+    "gemini": { "enabled": true, "models": ["gemini-3.5-flash-lite"] },
+    "groq": { "enabled": true, "models": ["openai/gpt-oss-20b"] },
+    "openrouter": { "enabled": true, "models": ["cohere/north-mini-code:free"] },
+    "ollama": { "enabled": true, "baseURL": "http://127.0.0.1:11434", "models": ["localagent-qwen3:4b-instruct", "localagent-qwen2.5:7b"] }
+  },
+  "routingOrder": ["gemini", "groq", "openrouter", "ollama"]
+}

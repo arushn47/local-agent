@@ -1,0 +1,40 @@
+# Local runtimes, credentials, generated distributions and private verification data.
+.runtime/
+node_modules/
+.localagent/
+.env*
+!.env.example
+**/.env*
+!**/.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.keystore
+**/credentials.json
+**/gateway-key.json
+**/secrets.json
+**/.opencode/
+demo/.opencode/
+.workspace-check/
+apps/workspace/dist/
+release/
+.freebuff/
+coverage/
+*.log
+*.exe
+*.msi
+*.msix
+*.dmg
+*.appx
+*.zip
+*.7z
+*.tar
+*.gz
+# Retain historical evidence on disk; do not commit raw sessions, screenshots,
+# profiles, user-data snapshots or machine-specific inventories.
+validation/**
+!validation/**/
+!validation/**/README.md
+evidence/**
+!evidence/README.md

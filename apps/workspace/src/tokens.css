@@ -1,0 +1,66 @@
+:root {
+  color-scheme: dark;
+  --canvas: #0e120f;
+  --surface: #141a15;
+  --surface-2: #19201a;
+  --surface-3: #1f271f;
+  --line: #26302a;
+  --line-strong: #354238;
+  --ink: #e8ede2;
+  --ink-2: #c4d0be;
+  --muted: #a6b5a2;
+  --faint: #92a28e;
+  --moss: #a8c47b;
+  --moss-ink: #0f150e;
+  --moss-dim: #3d5132;
+  --amber: #d9b46a;
+  --red: #d98b7a;
+  --sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --serif: Georgia, 'Times New Roman', serif;
+  --mono: 'Cascadia Code', ui-monospace, Consolas, monospace;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+  --dur: 120ms;
+  --ease: cubic-bezier(.2, .7, .3, 1);
+
+  /* Legacy aliases for backward compatibility */
+  --code-bg: var(--surface-2);
+  --paper: var(--canvas);
+  --sidebar: var(--surface);
+  --green: var(--moss);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #f5f7f4;
+  --surface: #ffffff;
+  --surface-2: #edf1ea;
+  --surface-3: #e2e8de;
+  --line: #d3dbcf;
+  --line-strong: #b9c4b4;
+  --ink: #1b261c;
+  --ink-2: #344335;
+  --muted: #4d5e4b;
+  --faint: #586a56;
+  --moss: #3e682e;
+  --moss-ink: #ffffff;
+  --moss-dim: #90b880;
+  --amber: #9e6d0a;
+  --red: #a83625;
+  --code-bg: var(--surface);
+  --paper: var(--canvas);
+  --sidebar: var(--surface-2);
+  --green: var(--moss);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: #485c4d;
+    --line-strong: #647d6a;
+    --muted: #aab5a8;
+    --faint: #8d9e8b;
+  }
+}

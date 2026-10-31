@@ -1,0 +1,9 @@
+{
+  "repository":"https://github.com/cheaper-inference/OmniRoute",
+  "version":"3.8.52",
+  "commit":"ad6f33f66bda34eba98645d3bfdabbde294bc843",
+  "next":"16.4.3",
+  "profile":"backend",
+  "sourcePatches":[],
+  "reason":"Rebuild with patched Next using upstream's supported backend-only profile; published 16.3 artifact is not 16.4-compatible."
+}

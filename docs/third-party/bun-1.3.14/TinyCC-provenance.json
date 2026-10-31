@@ -1,0 +1,12 @@
+{
+  "bunCommit": "0d9b296af33f2b851fcbf4df3e9ec89751734ba4",
+  "defaultTinyCCCommit": "12882eee073cfe5c7621bcfadf679e1372d4537b",
+  "buildPinUrl": "https://github.com/oven-sh/bun/blob/0d9b296af33f2b851fcbf4df3e9ec89751734ba4/scripts/build/deps/tinycc.ts",
+  "patch": "patches/tinycc/tcc.h.patch",
+  "notice": {
+    "file": "TinyCC-COPYING",
+    "gitBlob": "223ede7de3ec74eb86253f9ce9ed7ba3c5aa9130",
+    "url": "https://github.com/oven-sh/tinycc/blob/12882eee073cfe5c7621bcfadf679e1372d4537b/COPYING"
+  },
+  "scope": "Default source pin verified. Original engine build options and corresponding object/relinking package remain unverified."
+}

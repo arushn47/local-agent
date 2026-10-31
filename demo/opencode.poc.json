@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "omniroute/local-coding-failover",
+  "small_model": "omniroute/local-coding-failover",
+  "autoupdate": false,
+  "share": "disabled",
+  "provider": {
+    "omniroute": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local OmniRoute",
+      "options": {
+        "baseURL": "http://127.0.0.1:20129/v1",
+        "apiKey": "local-loopback-demo",
+        "timeout": 600000
+      },
+      "models": {
+        "local-coding-failover": {
+          "name": "Local coding: Qwen 2.5 -> Qwen3 4B Instruct",
+          "tool_call": true,
+          "limit": { "context": 8192, "output": 1800 }
+        }
+      }
+    }
+  }
+}

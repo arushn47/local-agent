@@ -1,0 +1,13 @@
+{
+  "name": "@giscus/react",
+  "version": "3.1.0",
+  "gitHead": "eba2a53fe392d86b86d46b4a99779b8576a9f5c1",
+  "repository": {
+    "url": "git+https://github.com/giscus/giscus-component.git",
+    "type": "git",
+    "directory": "react"
+  },
+  "distIntegrity": "sha512-0TCO2TvL43+oOdyVVGHDItwxD1UMKP2ZYpT6gXmhFOqfAJtZxTzJ9hkn34iAF/b6YzyJ4Um89QIt9z/ajmAEeg==",
+  "url": "https://raw.githubusercontent.com/giscus/giscus-component/eba2a53fe392d86b86d46b4a99779b8576a9f5c1/LICENSE",
+  "sha256": "fb3da8cdebdbbf3da4110173a1831ea47ab7960a1d11367072f5a1f0158e24cd"
+}

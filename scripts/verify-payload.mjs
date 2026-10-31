@@ -1,0 +1,7 @@
+import {readdirSync,readFileSync,writeFileSync,lstatSync} from 'node:fs';
+import {join,resolve,relative} from 'node:path';
+import {loadEnvironment} from '../src/config.mjs';
+const root=resolve('release/desktop-0.5.2/win-unpacked'),env=loadEnvironment(),secrets=Object.entries(env).filter(([k,v])=>/API_KEY|TOKEN|SECRET|PASSWORD/i.test(k)&&typeof v==='string'&&v.length>=16).map(([,v])=>Buffer.from(v));
+const report={scannedFiles:0,scannedBytes:0,knownSecretMatches:[],forbiddenConfigurationFiles:[],links:[],scope:'Exact locally known secret values only; no secret content is emitted. Not a complete secret-pattern scanner.'};
+function walk(dir){for(const e of readdirSync(dir,{withFileTypes:true})){const path=join(dir,e.name),name=relative(root,path).replaceAll('\\','/');if(e.isSymbolicLink()||lstatSync(path).nlink>1&&e.isFile()){report.links.push(name);continue;}if(e.isDirectory()){walk(path);continue;}if(!e.isFile())continue;if(e.name==='.env'||/^\.env\.(?!example$)/i.test(e.name)||e.name==='.npmrc')report.forbiddenConfigurationFiles.push(name);const bytes=readFileSync(path);report.scannedFiles++;report.scannedBytes+=bytes.length;if(secrets.some(secret=>bytes.includes(secret)))report.knownSecretMatches.push(name);}}
+walk(root);report.passed=![report.knownSecretMatches,report.forbiddenConfigurationFiles,report.links].some(x=>x.length);writeFileSync('validation/phase52/payload-security.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));if(!report.passed)process.exitCode=1;

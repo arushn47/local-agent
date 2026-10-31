@@ -1,0 +1,21 @@
+// Installer-only 0.5.2 recovery revision; preserve the original accepted payload/artifact.
+import {readFileSync,writeFileSync,mkdirSync,copyFileSync,existsSync,createReadStream} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {spawn} from 'node:child_process';
+import {prepareNsis} from './prepare-nsis.mjs';
+const output=resolve('release/desktop-0.5.2-recovery4'),evidence=resolve('validation/phase52-install-fix');mkdirSync(output,{recursive:true});mkdirSync(evidence,{recursive:true});
+const artifact=join(output,'LocalAgent-Setup-0.5.2-recovery4-x64.exe');if(existsSync(artifact))throw Error('Refusing to replace existing recovery artifact');
+if(JSON.parse(readFileSync('apps/desktop/package.json')).version!=='0.5.2')throw Error('Recovery revision requires the tested 0.5.2 payload');
+const cache=resolve('.localagent/desktop-archive-cache/localagent-desktop-0.5.2-x64.nsis.zip'),expected=JSON.parse(readFileSync('validation/phase52/archive.json'));
+const hash=createHash('sha256');for await(const chunk of createReadStream(cache))hash.update(chunk);if(hash.digest('hex')!==expected.sha256)throw Error('Original payload archive changed');
+copyFileSync(cache,join(output,'localagent-desktop-0.5.2-x64.nsis.zip'));
+prepareNsis({evidenceDirectory:evidence});
+const config=resolve('.localagent/install-recovery-config.cjs');
+writeFileSync(config,`const base=require(${JSON.stringify(resolve('apps/desktop/electron-builder.config.cjs'))});module.exports={...base,directories:{...base.directories,output:${JSON.stringify(output)}},win:{...base.win,artifactName:'LocalAgent-Setup-0.5.2-recovery4-x64.exe'}};`);
+const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!/(API_KEY|TOKEN|SECRET|PASSWORD|^CSC_|^LOCALAGENT_SIGNING|^LOCALAGENT_REQUIRE_SIGNING)/i.test(k)));
+Object.assign(env,{CSC_IDENTITY_AUTO_DISCOVERY:'false',ELECTRON_BUILDER_CACHE:resolve('.localagent/builder-cache')});
+const child=spawn(process.execPath,['node_modules/electron-builder/cli.js','--projectDir','apps/desktop','--config',config,'--win','--x64','--prepackaged',resolve('release/desktop-0.5.2/win-unpacked')],{env,windowsHide:true,stdio:'inherit'});
+const code=await new Promise((r,j)=>{child.once('exit',r);child.once('error',j);});if(code!==0)throw Error('Recovery installer build failed');
+const final=createHash('sha256');for await(const c of createReadStream(artifact))final.update(c);
+writeFileSync(join(evidence,'artifact.json'),JSON.stringify({artifact,version:'0.5.2',revision:'recovery4',sha256:final.digest('hex'),payloadArchiveSha256:expected.sha256,signed:false,scope:'Installer UX/recovery only; original runtime archive unchanged'},null,2));

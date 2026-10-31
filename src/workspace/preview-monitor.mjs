@@ -1,0 +1,5 @@
+// Runs only inside the untrusted, opaque-origin preview. Messages are data,
+// never commands. Both the receiving window and server enforce strict bounds.
+export function previewMonitor({token,uiOrigin}){
+ return `<link rel="icon" href="data:,"><script>(()=>{if(parent===window)return;const token=${JSON.stringify(token)},origin=${JSON.stringify(uiOrigin)};let sent=0;setInterval(()=>sent=0,1000);const text=v=>{try{return (typeof v==='string'?v:JSON.stringify(v)).slice(0,2000)}catch{return '[unprintable]'}};const emit=(level,message)=>{if(sent++<10)parent.postMessage({channel:'localagent-preview',token,level,message:text(message)},origin)};for(const level of ['log','info','warn','error']){const original=console[level].bind(console);console[level]=(...args)=>{emit(level,args.slice(0,3).map(text).join(' '));original(...args)}}addEventListener('error',e=>emit('error',e.message||'Resource could not load'),true);addEventListener('unhandledrejection',e=>emit('error',e.reason?.message||text(e.reason)));})();</script>`;
+}

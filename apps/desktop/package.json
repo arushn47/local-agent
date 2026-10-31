@@ -1,0 +1,11 @@
+{
+  "name": "localagent-desktop",
+  "productName": "LocalAgent",
+  "version": "0.5.2",
+  "private": true,
+  "description": "Local-first AI coding with guarded free and BYOK routing",
+  "author": "LocalAgent",
+  "type": "module",
+  "main": "src/bootstrap.mjs",
+  "dependencies": {}
+}

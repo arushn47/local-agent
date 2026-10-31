@@ -1,0 +1,19 @@
+{
+  "sharp": "0.35.5",
+  "npmGitHead": "51a990faa26ade5586a4934ac9673c98d8893326",
+  "libvips": "8.18.7",
+  "libvipsCommit": "24ad4d042940e6bf99a68871ba886ca8847c9c82",
+  "notices": [
+    {
+      "file": "sharp-LICENSE",
+      "url": "https://github.com/lovell/sharp/blob/v0.35.5/LICENSE",
+      "gitBlob": "37ec93a14fdcd0d6e525d97c0cfa6b314eaa98d8"
+    },
+    {
+      "file": "libvips-8.18.7-LICENSE",
+      "url": "https://github.com/libvips/libvips/blob/24ad4d042940e6bf99a68871ba886ca8847c9c82/LICENSE",
+      "gitBlob": "4362b49151d7b34ef83b3067a8f9c9f877d72a0e"
+    }
+  ],
+  "scope": "Exact version notices and source revision; aggregate LGPL-3.0-or-later declaration and all native dependencies/build/replacement obligations remain unresolved."
+}

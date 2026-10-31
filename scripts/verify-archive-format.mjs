@@ -1,0 +1,12 @@
+import {ZipFile} from 'yazl';
+import {mkdirSync,createWriteStream,writeFileSync,readFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {pipeline} from 'node:stream/promises';
+import {spawn} from 'node:child_process';
+const dir=resolve('.localagent/zip64-proof-'+Date.now()),out=join(dir,'extracted'),file=join(dir,'fixture.zip');mkdirSync(out,{recursive:true});
+const zip=new ZipFile(),done=pipeline(zip.outputStream,createWriteStream(file)),count=65540;
+for(let i=0;i<count;i++)zip.addBuffer(Buffer.from('zip64 marker'),`entry-${String(i).padStart(5,'0')}.txt`,{compress:false,mtime:new Date('2026-01-01T00:00:00Z')});zip.end();await done;
+const run=args=>new Promise((r,j)=>{const c=spawn(join(process.env.SystemRoot,'System32/tar.exe'),args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let lines=0,error='';c.stdout.on('data',b=>{for(const byte of b)if(byte===10)lines++;});c.stderr.on('data',b=>error+=b);c.once('error',j);c.once('exit',code=>r({code,lines,error:error.slice(0,500)}));});
+const listing=await run(['-tf',file]),extraction=await run(['-xf',file,'-C',out,'entry-65539.txt']);
+const bytes=readFileSync(file),end=bytes.subarray(bytes.length-22),locator=bytes.subarray(bytes.length-42,bytes.length-22);
+const report={entries:count,zip32Sentinel:end.readUInt16LE(10),zip64Locator:locator.readUInt32LE(0)===0x07064b50,listing,extraction,lastEntry:extraction.code===0?readFileSync(join(out,'entry-65539.txt'),'utf8'):null};report.passed=report.zip32Sentinel===65535&&report.zip64Locator&&listing.code===0&&listing.lines===count&&extraction.code===0&&report.lastEntry==='zip64 marker';writeFileSync('validation/phase5/zip64.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));if(!report.passed)process.exitCode=1;

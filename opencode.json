@@ -1,0 +1,31 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "omniroute/localagent/coding",
+  "small_model": "omniroute/localagent/coding",
+  "enabled_providers": [
+    "omniroute"
+  ],
+  "autoupdate": false,
+  "share": "disabled",
+  "provider": {
+    "omniroute": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LocalAgent",
+      "options": {
+        "baseURL": "http://127.0.0.1:20141/v1",
+        "apiKey": "{env:LOCALAGENT_GATEWAY_KEY}",
+        "timeout": 600000
+      },
+      "models": {
+        "localagent/coding": {
+          "name": "LocalAgent free coding",
+          "tool_call": true,
+          "limit": {
+            "context": 8192,
+            "output": 1800
+          }
+        }
+      }
+    }
+  }
+}
