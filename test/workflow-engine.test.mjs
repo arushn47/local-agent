@@ -9,6 +9,7 @@ import {
   listCheckpoints,
   getCheckpoint
 } from '../src/workspace/checkpoints.mjs';
+import { previewCheckpointRestore } from '../src/workspace/checkpoints.mjs';
 import {
   createWorkflowInstance,
   saveWorkflow,
@@ -64,7 +65,9 @@ test('checkpoint creation captures snapshot and safely restores without touching
     writeFileSync(join(dir, 'another-unrelated.md'), '# Don not touch me\n', 'utf8');
 
     // 3. Restore checkpoint
-    const res = restoreCheckpoint({ workspaceDir: dir, checkpointId: chk.checkpointId });
+    assert.throws(() => restoreCheckpoint({ workspaceDir: dir, checkpointId: chk.checkpointId }), /approval_required/);
+    const preview = previewCheckpointRestore({ workspaceDir: dir, checkpointId: chk.checkpointId });
+    const res = restoreCheckpoint({ workspaceDir: dir, checkpointId: chk.checkpointId, approval: { approved: true, token: preview.token } });
     assert.equal(res.success, true);
     assert.ok(res.restoredFiles.includes('source.js'));
     assert.ok(res.removedFiles.includes('new-module.js'));
@@ -171,7 +174,7 @@ test('retryStep allows model reassignment without replaying completed predecesso
   }
 });
 
-test('rollbackToCheckpoint restores files and resets workflow step state', () => {
+test('approved rollback restores files and pauses the workflow for replanning', () => {
   const dir = setupWorkspace();
   try {
     const chk = createCheckpoint({
@@ -196,9 +199,12 @@ test('rollbackToCheckpoint restores files and resets workflow step state', () =>
     writeFileSync(join(dir, 'source.js'), 'GARBAGE DATA\n', 'utf8');
 
     // Rollback
-    const res = rollbackToCheckpoint('wf-rollback-test', chk.checkpointId, dir);
+    const preview = previewCheckpointRestore({ workspaceDir: dir, checkpointId: chk.checkpointId });
+    const res = rollbackToCheckpoint('wf-rollback-test', chk.checkpointId, dir, { approved: true, token: preview.token });
     assert.equal(res.success, true);
     assert.equal(readFileSync(join(dir, 'source.js'), 'utf8'), 'const version = 1;\n');
+    assert.equal(loadWorkflow(instance.id, dir).requiresReplan, true);
+    assert.throws(() => resumeWorkflow(instance.id, dir), /replan_required/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

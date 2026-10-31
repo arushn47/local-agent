@@ -1,0 +1,38 @@
+# Phase 8 Integration Recovery & Hardening
+
+Updated 2026-11-01. This records source and fixture evidence, not production multi-agent acceptance. Recovery is authorized; no paid inference, unapproved live tests, packaging, publication or remote push.
+
+## Verified checkpoints
+
+1. **Git preservation.** Local root commit `21eacb4` preserves 285 source/document/fixture files. `scripts/audit-git-baseline.mjs` checked staged bytes against local environment secrets and high-confidence credential patterns without printing values. Private credentials, runtimes, installers, raw session/evidence data, screenshots and machine inventories remain on disk and ignored. Additional registry/tool credential paths are excluded. No remote operation was performed.
+2. **False-success prevention.** Commit `d78ab90` passed 150/150 regressions and UI build. Missing executors fail. Custom runners require explicit outcomes and are labelled `custom_runner`; they do not establish production verification. OpenCode timeout, provider error, retry/busy status and failed/missing observations cannot establish completion. Test/review prose cannot establish a result; missing or negative verifier outcomes fail the step. Blocked/incomplete steps cannot complete the workflow; completed steps cannot be retried. The tree derives stage status from actual child state instead of hardcoded success.
+3. **Workflow API and checkpoint safety.** Strict identifiers, bounded graph shape/depth/count, role/dependency/array/text/file validation and duplicate-plan rejection precede instantiation. Persisted plans are revalidated. State writes use exclusive temporary files, fsync, no-clobber creation and atomic rename. Snapshot paths reject private files, traversal, alternate streams, Windows aliases, links/junctions and hardlinks. Text/size/hash/owner checks reject invalid snapshots. Restore requires a preview plus explicit approval bound to current file hashes and snapshot contents. A post-preview edit rejects restoration before writes. Approved restoration first invalidates completion evidence, pauses the workflow and requires a new plan; it cannot silently resume or replay work.
+
+## Final validation
+
+| Check | Result |
+|---|---|
+| `npm test` | **156/156**, zero failures/skips; includes authenticated HTTP and temporary junction/hardlink fixtures outside the restricted sandbox. |
+| `npm run build:ui` | Pass; 117 modules, 2.46 seconds. Existing 769 KB highlighting chunk warning remains. |
+| `node scripts/verify-workflow-recovery-ui.mjs` | Pass, zero inference. Real UI → authenticated API → filesystem path: dismiss preserves contents; post-preview edit returns conflict; freshly confirmed restore succeeds and workflow stays paused for replanning. |
+| Phase 7 browser fixture, isolated copy | Pass after waiting for existing CSS theme transitions before contrast measurement. Zero automated violations; incomplete contrast/name checks remain. The first transition-race failure was observed and retained in temporary output. Product CSS was unchanged. |
+| Phase 8 browser fixture, isolated copy | Pass, zero dark/light axe violations. This is seeded display/interaction evidence, not execution evidence. |
+
+New tests: `test/workflow-hardening.test.mjs` and `test/workflow-security.test.mjs`. Older workflow fixtures were updated to supply explicit verification outcomes and explicit restoration approval; invalid conflicting plans are now rejected rather than bypassing their validation. Test success must not be presented as a live provider, billing or tool-execution result.
+
+## Execution gate and remaining checkpoints
+
+The production workflow API returns **409 `workflow_execution_not_ready`** for activation/resume/retry until integration is explicitly enabled after acceptance. Plans can be saved with `autoStart:false`; the UI states that they do not run agents. Existing single-agent tasks are retained. Paid workflow policy activation is rejected; Free Only remains the default. The incomplete direct session branch is not promoted by these tests.
+
+4. Integrate with the existing task supervisor: persist session/attempt identity before dispatch, share progress/deadline bounds, expose permissions to the correct workflow step, propagate cancellation/abort, bind only registered exact models and collect real tool outcome evidence. Independently verify the pinned SDK/runtime contract without inference first.
+5. Add exclusive execution ownership, cross-run file coordination, crash/restart reconciliation and durable loop cursors. An ambiguous dispatched step must reconcile its original session or stop for review, never blindly replay. Replanning after restore must preserve previous attempt evidence.
+6. Attribute every workflow inference request at the guard, with durable reservations, real workflow/task identity, conservative unknown-usage handling, explicit spending authorization and tested concurrent/month-rollover recovery. Zero-cost policy remains mandatory until those paid gates pass.
+7. Install specialized role definitions into actual OpenCode configuration, enforcing tools and permissions rather than relying on prompt text.
+8. Extend adversarial acceptance to real lifecycle crashes, cancellation, concurrent writes, rate limits, budget exhaustion and interrupted recovery. Current negative API and filesystem fixtures cover only the early safety boundary.
+9. Verify UI → API → OpenCode → OmniRoute/guard → actual tools → independent tests/review under a separately approved bounded free-only live test. No such test ran during this recovery checkpoint.
+
+## Limits
+
+Atomic JSON persistence is not durable execution recovery. Restoring multiple approved files is not one filesystem transaction: a mid-write filesystem failure can leave a partial approved restore; snapshots remain and the workflow stays paused. Link/path/descriptor checks are not an OS sandbox against a hostile same-user process racing filesystem operations. Human accessibility, independent-machine testing, native licensing, signing and public release gates remain open.
+
+Historical live-double artifacts contain successful guard requests and generated/tested source, plus failed runs. Their custom runner wrote files itself. They do not prove the product's OpenCode workflow path or independent billing verification. Prior all-complete claims are superseded; the original source/claims remain in the preservation commit and raw artifacts remain local.

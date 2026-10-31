@@ -5,6 +5,7 @@ export function WorkflowTree(props) {
   const [collapsedNodes, setCollapsedNodes] = createSignal(new Set());
   const [selectedModelStepId, setSelectedModelStepId] = createSignal(null);
   const [modelChangePending, setModelChangePending] = createSignal(false);
+  const [actionError, setActionError] = createSignal('');
 
   const wf = () => props.workflow;
   const models = () => props.models || [];
@@ -107,15 +108,21 @@ export function WorkflowTree(props) {
   const handleRestoreCheckpoint = async (checkpointId) => {
     if (!wf()?.id || !props.projectId || !checkpointId) return;
     try {
-      await api(`projects/${props.projectId}/workflows/${wf().id}/rollback`, { checkpointId });
+      setActionError('');
+      const preview = await api(`projects/${props.projectId}/workflows/${wf().id}/rollback-preview`, { checkpointId });
+      const changes = preview.files.filter(file => file.currentHash !== file.snapshotHash);
+      if (!window.confirm(`Restore this checkpoint? This will replace or remove the current contents of these files:\n\n${changes.map(file => `${file.action}: ${file.path}`).join('\n') || 'No file changes.'}\n\nChanges made after this preview will stop restoration. The workflow will remain paused.`)) return;
+      await api(`projects/${props.projectId}/workflows/${wf().id}/rollback`, { checkpointId, approval: { approved: true, token: preview.token } });
       props.onRefresh?.();
     } catch (e) {
+      setActionError('Checkpoint was not restored. Refresh and review the current files before trying again.');
       console.error('Failed to restore checkpoint:', e);
     }
   };
 
   return (
     <div class="workflow-tree-card" role="region" aria-label="Workflow execution tree">
+      <Show when={actionError()}><p role="alert">{actionError()}</p></Show>
       {/* 1. Header Card */}
       <div class="wf-card-header">
         <div class="wf-header-left">

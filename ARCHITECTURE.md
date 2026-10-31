@@ -1,6 +1,6 @@
 # LocalAgent architecture
 
-2026-11-01 implementation correction: the Phase 8 architecture below includes intended behavior not yet integrated. Specialized roles are not yet installed into generated OpenCode config; exact catalog assignments, supervised workflow lifecycle, durable recovery and per-workflow boundary attribution remain recovery gates. Custom-runner/live-double artifacts do not verify that production path. False-success recovery now fails on missing executors/timeouts/provider/observation errors, treats prose as unverified, and checks every step before workflow completion. **150/150** regressions and UI build pass; API/checkpoint security is the next checkpoint. No release artifact was rebuilt.
+2026-11-01: Phase 8 recovery checkpoints 1–3 are verified at source/fixture level. Production workflow execution is gated pending lifecycle, model, budget and role integration. See [recovery evidence](docs/phase8/RECOVERY.md). No release artifact was rebuilt.
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.
 
@@ -93,55 +93,16 @@ Phase 6 starts with a read-only context projection from OpenCode session records
 Phase 6.2 keeps the guard bound unchanged and instead schedules upstream's supported `compaction.buffer`/`keep.tokens` from `inputCeiling`, the single definition of the guard's usable input budget, so automatic compaction runs before the guard rejects the same request. Manual compaction is deliberately not exposed: the pinned 1.18.31 engine answers 503 for `/api/session/:sessionID/compact` and the v1 summarize route is deprecated. LocalAgent still stores no history or summary; a compaction marker plus its auto flag are projected as metadata, and conversation context is read only through the pinned message/context APIs.
 
 
-## Phase 8 — Multi-Agent Workflows & Free-First Model Orchestration Architecture
+## Phase 8 implementation boundary — 2026-11-01
 
-Phase 8 introduces dependency-aware multi-agent orchestration and evolves the routing policy from free-only to a free-first, user-controlled architecture supporting both free and optional paid models.
+Implemented: heuristic catalog recommendations, template/numbered-list plans, graph validation, role prompt definitions, file-lock/loop units and an inspector tree. The inspector polls; it does not stream workflow execution events. Specialized role configuration, exact model registration, shared session supervision, durable non-replaying recovery and workflow-attributed budgets remain integration work. A custom runner is labelled as such and does not establish production verification.
 
-### 1. Multi-Agent Engine & OpenCode Integration
-OpenCode remains the authoritative execution engine. We do not invent a separate agent runner. Instead, LocalAgent composes OpenCode sessions and prompts:
-- **Role-based Agents**: Defined in generated `opencode.json` under `agent.<role>` with role-specific system prompts, tool permissions (`read`, `write`, `bash`, `glob`, `grep`), and model bindings.
-  - **Planner**: Read-only tools (`read`, `glob`, `grep`), model chosen for reasoning/context.
-  - **Researcher**: Exploration tools (`read`, `glob`, `grep`), model chosen for speed/context.
-  - **Implementer**: Code editing tools (`write`, `read`, `glob`, `grep`), model chosen for coding.
-  - **Debugger**: Diagnostic tools (`bash`, `read`, `write`), model chosen for problem solving.
-  - **Tester**: Test verification tools (`bash`, `read`), executes test suites.
-  - **Reviewer**: Read-only tools (`read`, `glob`), verifies diff against acceptance criteria.
-  - **Custom**: User-defined roles, instructions, tools, and model bindings.
-- **Session Coordination**: The Orchestration Engine creates an isolated OpenCode session for each workflow node. Handoffs occur by passing structured task briefs and artifact diffs from upstream dependencies.
-- **Safe Parallelism & Conflict Detection**: A File-Lock Conflict Matrix tracks planned file edits per node. Nodes with disjoint file targets or read-only tools run in parallel across concurrent OpenCode sessions. Overlapping write nodes are serialized or staged through safe patch merge verification.
-- **Durable Workflow State**: Workflow definitions, dependency DAGs, node states (`planned`, `running`, `blocked`, `completed`, `failed`), and task handoffs persist in `.localagent/workflows/<id>.json`. Interrupted workflows resume cleanly without replaying side-effects.
+Recovery now rejects missing executors and observation/provider/timeout failures. Test/review text is not verification. Workflow completion checks all leaf outcomes; completed steps cannot be retried. Production API activation/resume/retry is blocked until an independently validated integration enables it. Free Only remains the default; paid workflow policies are rejected while explicit authorization and boundary attribution are incomplete.
 
-### 2. Free-First, User-Controlled Spending & Guard Architecture
-LocalAgent defaults to free models and zero-price inference. Paid inference is strictly opt-in:
-- **Policy Modes**:
-  - `Free Only` (Default): Only verified $0.00 models admitted. Zero-price headers enforced.
-  - `Free Preferred`: Automatically prioritizes free models; falls back to paid models only if enabled and within configured budget limits.
-  - `Paid Allowed`: Permits direct assignment of authorized paid models, gated by budgets.
-- **Atomic Budget Reservation Ledger**:
-  - Tracks `perTaskBudgetUsd`, `perWorkflowBudgetUsd`, and `monthlySpendingLimitUsd`.
-  - Concurrent agents must atomically reserve an estimated ceiling before dispatch. When a task completes, actual cost from provider usage data is reconciled, and excess reservation is returned.
-  - If reservation exceeds remaining workflow or monthly budget, execution halts with a user approval prompt. Never silently incur charges or escalate costs.
-- **Individual Model Discovery & Capability Matrix**:
-  - Discovers specific models per provider (Gemini, Groq, OpenRouter, Ollama) rather than a single provider default.
-  - Discovers and caches context window, max completion tokens, tool-calling support, pricing per token (input/output/request), and observable rate limits.
-  - Multiple distinct models from the same provider can be mapped to different agent roles simultaneously.
-- **Safeguards Preserved**:
-  - Loopback authentication, DPAPI credential security, Gemini thought signature preservation, and prompt injection/path escape boundaries remain fully enforced.
+Workflow plans are untrusted: identifiers exclude traversal/prototype keys; node depth/count, arrays, text, roles, dependencies and file paths are bounded and validated again on persistence/load. Invalid or conflicting plans cannot be instantiated. State uses exclusive temporary files, fsync and atomic rename, with no-clobber creation. This does not yet establish crash-safe execution recovery.
 
-### 3. Hierarchical Workflows, Bounded Repeat Loops & Execution Tree Engine
-Phase 8 adopts an expandable, visible workflow execution tree pattern:
-- **Hierarchical Node Structure**: Workflows are composed of nested steps: `Workflow -> Stage -> Step -> Loop -> Action`. Steps can declare explicit dependencies (`dependsOn: string[]`), input artifacts, target files, and expected outputs.
-- **Bounded Repeat Loops (`Implement -> Test -> Review -> Fix`)**:
-  - Supports iterative verification cycles via `repeat` blocks with explicit `maxIterations` (default 3) and termination conditions.
-  - Bounded to prevent runaway execution: exits when tests pass and review criteria are met, or when `maxIterations` / spending limits are reached.
-  - Preserves loop iteration history (`loop 1`, `loop 2`) so users can compare diffs and test results across attempts.
-- **Checkpoints, Pausing & Safe Recovery**:
-  - The engine captures a clean project file checkpoint before major stages and loop boundaries.
-  - Interactive lifecycle controls: Pause (`||`), Resume (`▶`), Cancel (`⏹`), and Retry (`↺`).
-  - On failure (e.g. quota limit, network error, or test failure), LocalAgent provides explicit options: **Restore Checkpoint** (rolls back uncommitted partial changes) and **Retry Step** (optionally with an alternate model).
-- **Expandable Live Tree State Protocol**:
-  - The runtime streams hierarchical workflow events over the existing session event pipe: node ID, parent ID, title, role, exact provider/model, status (`pending`, `running`, `completed`, `failed`, `paused`, `skipped`), start time, elapsed duration, output diffs, and errors.
-- **Declarative, Reusable Workflow Templates**:
-  - Workflows are defined in modular JSON/YAML schemas stored in `.localagent/workflows/templates/`.
-  - Standard templates include `feature-implement-verify`, `bug-diagnose-fix`, `refactor-clean`, and `quick-single`.
-  - Users can inspect, edit, parameterize, save, and reuse custom workflow presets without hardcoded constraints.
+Snapshot access rejects private paths, lexical escapes, Windows aliases/streams, links/junctions, hardlinks, non-text and oversized content. Reads/restores validate snapshot hashes and ownership. The renderer first obtains a path/action/hash preview, presents an explicit confirmation and submits an approval token bound to that preview. Any content change invalidates the approval. All files are preflighted before mutation. Approved restoration invalidates workflow completion evidence before writing files, pauses execution and requires a new reviewed plan. It never silently resumes or replays completed work.
+
+This is not an OS sandbox or a multi-file restore transaction. A filesystem failure mid-restore may leave an approved partial restoration; snapshots remain and the workflow stays paused. Hostile same-user processes racing filesystem operations remain outside an OS isolation guarantee. Atomic file persistence must not be confused with durable agent execution recovery.
+
+Next: reuse the existing task lifecycle for workflow sessions and permission UI, persist session/attempt identity before dispatch, propagate abort and exact model attribution through the existing OmniRoute/guard boundary, install actual role permissions, then validate adverse lifecycle and real tool execution. No bypass of the guard, paid inference or unapproved live tests.

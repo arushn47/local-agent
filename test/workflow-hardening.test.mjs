@@ -53,3 +53,14 @@ test('blocked dependencies and missing verification cannot complete a workflow',
     assert.throws(() => retryStep(f.wf.id, 'step-b', { workspaceDir: f.dir }), /requires_failed_step/);
   } finally { f.cleanup(); }
 });
+
+test('a tester or reviewer needs an explicit verified outcome, including with custom fixture runners', async () => {
+  for (const role of ['tester', 'reviewer']) {
+    const f = fixture([{ id: 'step-a', type: 'task', title: 'Verify', agent: role }]);
+    try {
+      const result = await runWorkflow({ workflowId: f.wf.id, workspaceDir: f.dir, runner: async () => ({ verified: true, output: 'All tests pass. APPROVED.' }) });
+      assert.equal(result.status, 'failed');
+      assert.equal(loadWorkflow(f.wf.id, f.dir).stepStates['step-a'].status, 'failed');
+    } finally { f.cleanup(); }
+  }
+});

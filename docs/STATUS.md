@@ -1,6 +1,10 @@
 # Current project status
 
-2026-11-01 recovery update: Phase 8 is **partially integrated**, despite the historical summaries. Local Git baseline `21eacb4` is preserved without secrets/installers/raw private evidence. False-success hardening passes **150/150** tests and production UI build. Missing executor, timeout/provider/observation failure and unverified test/review prose cannot produce success. Production lifecycle, security, recovery, attributed budgets and role enforcement remain recovery work. No live inference, packaging, publishing or remote push occurred. Phase 5 public-release gates remain open.
+Updated 2026-11-01. Phase 8 recovery checkpoints 1–3 have source/fixture acceptance: local Git baseline `21eacb4`, false-success fixes `d78ab90`, strict workflow API/state/snapshot validation and explicitly approved, content-bound checkpoint restoration. **156/156 tests**, production UI build and real authenticated browser restore checks pass. [Detailed evidence and remaining gates](phase8/RECOVERY.md).
+
+Production workflow activation/resume/retry is gated until real supervised OpenCode execution and guard attribution are validated. Plans can be saved; existing single-agent functionality remains available. Paid workflow activation is rejected. Checkpoints 4–9 remain open: lifecycle/model/permission integration, concurrency/crash recovery, budgets, actual role tools and adverse end-to-end validation. No live inference, packaging, publication or remote push occurred. Phase 5 public-release blockers remain open.
+
+## Historical Phase 5–6 evidence
 
 Updated 2026-10-29. 0.5.1 is an accepted development milestone. Phase 5.2 produced an unsigned 0.5.2 development candidate; **public release remains blocked**. Owner now authorizes Phase 6 coding/context development; no new inference routes. See [focused audit](PHASE6-AUDIT.md).
 

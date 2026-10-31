@@ -14,6 +14,14 @@ node_modules/
 **/credentials.json
 **/gateway-key.json
 **/secrets.json
+**/.npmrc
+**/.pypirc
+**/.netrc
+**/.git-credentials
+**/.ssh/
+**/.aws/
+**/.azure/
+**/.kube/
 **/.opencode/
 demo/.opencode/
 .workspace-check/

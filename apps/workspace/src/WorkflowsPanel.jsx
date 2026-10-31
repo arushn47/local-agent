@@ -14,6 +14,7 @@ export function WorkflowsPanel(props) {
   const [newTitle, setNewTitle] = createSignal('');
   const [newTemplate, setNewTemplate] = createSignal('feature-implement-verify');
   const [newPolicy, setNewPolicy] = createSignal('free_only');
+  const [createError, setCreateError] = createSignal('');
 
   const projectId = () => props.project?.id;
 
@@ -62,16 +63,19 @@ export function WorkflowsPanel(props) {
     e.preventDefault();
     if (!projectId() || !newTitle().trim()) return;
     try {
+      setCreateError('');
       const created = await api(`projects/${projectId()}/workflows`, {
         prompt: newTitle(),
         templateId: newTemplate(),
-        policy: newPolicy()
+        policy: newPolicy(),
+        autoStart: false
       });
       setShowNewModal(false);
       setNewTitle('');
       await loadData();
       if (created?.id) await selectWorkflow(created.id);
     } catch (e) {
+      setCreateError('The plan could not be saved. Check its file paths and model availability, then try again.');
       console.error('Failed to create workflow:', e);
     }
   };
@@ -89,6 +93,8 @@ export function WorkflowsPanel(props) {
 
   return (
     <div class="workflows-panel" role="region" aria-label="Workflows management panel">
+      <p role="status">Workflow execution is temporarily unavailable. You can save plans without running agents.</p>
+      <Show when={createError()}><p role="alert">{createError()}</p></Show>
       {/* Workflows Sub-header */}
       <div class="wf-panel-subhead">
         <div class="wf-subhead-left">
@@ -211,8 +217,8 @@ export function WorkflowsPanel(props) {
                   onChange={(e) => setNewPolicy(e.currentTarget.value)}
                 >
                   <option value="free_only">Free Only (Strict $0.00 cap, default)</option>
-                  <option value="free_preferred">Free Preferred (Fallback to paid if authorized)</option>
-                  <option value="paid_allowed">Paid Allowed (Direct paid models with budget limit)</option>
+                  <option value="free_preferred" disabled>Free Preferred — authorization unavailable</option>
+                  <option value="paid_allowed" disabled>Paid Allowed — authorization unavailable</option>
                 </select>
               </div>
 

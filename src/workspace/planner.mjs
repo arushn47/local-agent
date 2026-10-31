@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ROLES, POLICIES, recommendModel, validateModelAssignment, getModel } from './models.mjs';
 import { BUILTIN_TEMPLATES, instantiateTemplate, getTemplate } from './workflow-templates.mjs';
 import { estimateCost } from './budget-ledger.mjs';
+import { assertWorkflowId, assertPublicFile } from './workflow-storage.mjs';
 
 export const WORKFLOW_MODES = Object.freeze({
   QUICK: 'quick',
@@ -119,6 +120,39 @@ export function getAllNodeIds(plan) {
 
 export function validatePlan(plan, catalog = null) {
   const errors = [];
+  // Shape/size checks precede recursive graph processing. Persisted plans and
+  // API plans are both untrusted; a cached `validation` field is never authority.
+  try {
+    assertWorkflowId(plan?.id);
+    if (typeof plan.title !== 'string' || !plan.title.trim() || plan.title.length > 500) throw Error('invalid_workflow_title');
+    if (!Object.values(POLICIES).includes(plan.policy)) throw Error('invalid_workflow_policy');
+    if (plan.mode !== undefined && !Object.values(WORKFLOW_MODES).includes(plan.mode)) throw Error('invalid_workflow_mode');
+    if (!Array.isArray(plan.stages) || !plan.stages.length) throw Error('invalid_workflow_stages');
+    let count = 0;
+    const walk = (nodes, depth = 0) => {
+      if (!Array.isArray(nodes) || !nodes.length || depth > 5) throw Error('invalid_workflow_depth');
+      for (const node of nodes) {
+        if (++count > 100 || !node || typeof node !== 'object' || Array.isArray(node)) throw Error('invalid_workflow_node');
+        assertWorkflowId(node.id);
+        if (node.type !== undefined && !['task', 'parallel', 'repeat'].includes(node.type)) throw Error('invalid_workflow_node_type');
+        if (node.agent && !Object.hasOwn(ROLES, node.agent)) throw Error('invalid_workflow_role');
+        if (node.type === 'task' && !node.agent) throw Error('invalid_workflow_role');
+        if (node.agent && node.steps) throw Error('invalid_workflow_leaf');
+        if (node.agent && node.type && node.type !== 'task') throw Error('invalid_workflow_leaf');
+        if (!node.agent && !['parallel', 'repeat'].includes(node.type)) throw Error('invalid_workflow_node_type');
+        for (const key of ['prompt', 'title', 'testCommand', 'assignedModel']) if (node[key] !== undefined && (typeof node[key] !== 'string' || node[key].length > 16000)) throw Error('invalid_workflow_text');
+        for (const key of ['targetFiles', 'readFiles', 'dependsOn', 'acceptanceCriteria', 'fallbackChain']) {
+          if (node[key] !== undefined && (!Array.isArray(node[key]) || node[key].length > 100 || node[key].some(v => typeof v !== 'string' || v.length > 1000))) throw Error('invalid_workflow_array');
+        }
+        for (const file of [...(node.targetFiles || []), ...(node.readFiles || [])]) assertPublicFile(file);
+        for (const id of node.dependsOn || []) assertWorkflowId(id);
+        if (node.type === 'repeat' && !['tests_passed', 'reviewer_approved', 'tests_passed && reviewer_approved'].includes(node.exitCondition || 'tests_passed && reviewer_approved')) throw Error('invalid_workflow_exit_condition');
+        if (node.steps) walk(node.steps, depth + 1);
+        else if (!node.agent) throw Error('invalid_workflow_children');
+      }
+    };
+    walk(plan.stages);
+  } catch (error) { return { valid: false, errors: [error.message] }; }
   if (!plan || typeof plan !== 'object') {
     return { valid: false, errors: ['plan_must_be_an_object'] };
   }

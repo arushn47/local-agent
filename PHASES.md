@@ -2,7 +2,15 @@
 
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 
-The status audit supersedes the earlier Phase 8 completion claims below. Phase 8 is partial; custom-runner and UI fixtures do not prove production OpenCode integration. Recovery checkpoint 1: local preservation baseline `21eacb4`, staged credential scan passed, private/generated evidence retained locally and excluded. Checkpoint 2: simulated success removed; timeout/provider/observation failures cannot complete steps; test/review prose cannot establish verification; completed steps cannot be retried; workflow completion requires all steps and explicit verification outcomes. Full suite **150/150** and production UI build pass. No live inference, packaging or publication. Security checkpoint 3 is next, followed by lifecycle integration, recovery/concurrency, attributed budgets, enforced roles and adversarial end-to-end validation. Each requires separate evidence.
+Phase 8 remains partial. Recovery checkpoints 1–3 have source/fixture evidence; checkpoints 4–9 remain open. Production workflow activation is blocked with `workflow_execution_not_ready` until the supervised execution and guard-attribution gates pass. Existing single-agent tasks remain available. No live inference, packaging, publishing or push.
+
+| Recovery checkpoint | Current evidence |
+|---|---|
+| 1. Git preservation | Local baseline `21eacb4`; credential scan passed; private/generated data stays ignored on disk. |
+| 2. False-success reporting | `d78ab90`; 150/150 suite and production UI build passed. Missing executors, timeout/provider/observation failures, and unverified test/review prose cannot establish success. |
+| 3. API/checkpoint safety | Strict identifiers and bounded plan validation; confined state paths, link/hardlink rejection, atomic state publication; owner-bound snapshots; explicit preview/approval with stale-content rejection; restore pauses and requires replanning. 156/156 suite, production UI build and real authenticated browser restore check pass. See [recovery evidence](docs/phase8/RECOVERY.md). |
+| 4–7. Production integration | Supervised OpenCode sessions, exact models, permissions/cancellation, durable concurrency/recovery, attributed inference budgets and enforced specialized roles remain open. Paid activation is rejected. |
+| 8–9. Adversarial and end-to-end acceptance | Early negative API/security fixtures pass. Crash/restart, runtime concurrency, budget/rate-limit and actual tool-execution acceptance remain open. Live tests need explicit bounded authorization. |
 
 Updated 2026-10-29. This plan specifies completion gates, not fixed delivery promises. [PRD](PRD.md) defines scope; [architecture](ARCHITECTURE.md) defines ownership. Phases 1-4 and 0.5.0/0.5.1 are accepted development milestones. Phase 5.2 addresses release blockers; independent clean-machine, stability, licensing and human-accessibility gates remain open. See [current status](docs/STATUS.md), [MEMORY](MEMORY.md) and [Phase 5.2 evidence](validation/phase52/README.md).
 
@@ -109,36 +117,6 @@ Core promise: **Get the most useful coding work from the resources users choose 
 | 8.6 Expandable Live Workflow Tree UI | Expandable live workflow execution tree in chat message cards and right-panel inspector; displays nested steps, status badges (`✓`, `⟳`, `⊗`, `⏳`, `⏸`), exact provider/model assignment chip, duration, live outputs, errors, and dependencies; pre-execution model switcher and mid-flight model reassignment; pause/cancel/retry action buttons; checkpoint restore and continue banners; 0 axe violations. | Expandable tree renders interactively in chat and inspector; live updates stream smoothly; pause/cancel/retry buttons operable; 0 axe-core accessibility violations in dark and light modes. |
 | 8.7 Benchmarks, Multi-Agent Fixtures & Regression | Comparative benchmark fixtures (single agent vs sequential vs parallel multi-agent with repeat loop); zero unapproved spend verification; 100% regression suite preservation (all existing 111 unit tests pass). Automated Playwright verification of live tree interactions, pausing, retries, and checkpoint restore. | 111/111 regression tests pass; multi-agent execution and repeat loop fixtures pass; Playwright verification succeeds cleanly. |
 
-Checkpoint status (2026-10-30): Phase 8 complete and verified through Checkpoints 8.1 to 8.7. 141/141 unit tests pass deterministically (0 failures). Production UI bundle builds in 2.54s. Automated Playwright verification (`scripts/verify-phase8-workflows.mjs`) passes cleanly with 0 axe-core accessibility violations in dark and light modes.
-- 8.1 Model Discovery & Capability Catalog: Exact pricing, token/context limits, verified free-tier eligibility, role scoring matrix, and manual overrides verified across Gemini, Groq, OpenRouter, and Ollama (`test/model-catalog.test.mjs`).
-- 8.2 Free-First Spending Policy & Budget Ledger: Free Only ($0.00 cap default), Free Preferred, and Paid Allowed policy tiers enforced; atomic budget reservations and actual usage cost reconciliation (`test/budget-ledger.test.mjs`).
-- 8.3 Hierarchical Planner & Template Engine: Natural language and template decomposition into stages, parallel groups, and bounded repeat loops (`maxIterations: 3`); DAG cycle and conflict validation (`test/planner.test.mjs`).
-- 8.4 Specialized Roles, Bounded Loops & Safe Parallelism: Planner, Implementer, Researcher, Debugger, Tester, and Reviewer role definitions; file-lock conflict matrix for safe parallelism; iterative repeat loop engine with termination predicates and context handoffs (`test/conflict-matrix.test.mjs`, `test/repeat-loop.test.mjs`, `test/roles.test.mjs`).
-- 8.5 Durable State Engine, Checkpoints & Recovery: Workflow persistence in `.localagent/workflows/<id>.json`; safe checkpoint snapshots preserving unrelated user files; pause, resume, cancel, and retry step controls (`test/workflow-engine.test.mjs`).
-- 8.6 Expandable Live Workflow Tree UI: Expandable hierarchical tree UI in chat and right inspector panel; nested status badges (`✓`, `⟳`, `⊗`, `⏳`, `⏸`), interactive model chips, live duration, outputs, errors, pause/resume/cancel controls, and checkpoint restore banner (`apps/workspace/src/WorkflowTree.jsx`, `apps/workspace/src/WorkflowsPanel.jsx`).
-- 8.7 Verification & Regressions: 141/141 unit tests pass (100% preservation of historical baselines); automated Playwright verification with 0 axe violations in dark/light modes (`validation/phase8/`). Packaging/publishing gates remain separated.
+## Historical Phase 8 evidence and limits
 
-## Phase 8 Independent Integration & Reliability Audit — 2026-10-30
-- **Full Execution Path Closed**: Verified and completed `executeStep` and `runWorkflow` in `src/workspace/workflow-engine.mjs` integrating OpenCode session creation, exact model ID bindings, pre-write safety checkpoints, file-lock conflict matrix, and repeat loop iteration context.
-- **Independent Audit Suite (`test/phase8-audit.test.mjs`)**: 6 integration tests verifying:
-  1. Dynamic DAG generation from prompt subtasks with file references, dependencies, and cycle validation.
-  2. Exact assigned model preservation and OpenCode session prompt invocation.
-  3. Parallel conflict-free wave scheduling vs exclusive write-lock serialization.
-  4. Bounded repeat loop failure handoffs (`[Handoff Context - Iteration X]`) and termination on success.
-  5. Clean repeat loop termination upon `maxIterations` exhaustion without infinite looping.
-  6. Pre-dispatch atomic budget reservation enforcement rejecting paid models in `free_only` mode.
-  7. Zero replay of completed side effects during step retries, and checkpoint restoration strictly preserving unrelated user edits.
-- **Live UI Connection**: Auto-polling interval added to `WorkflowsPanel.jsx` (1.5s refresh for running/pending workflows); auto-start triggered on workflow creation; 0 axe-core accessibility violations.
-- **Complete Regression Baseline**: 147/147 tests pass deterministically (`npm test`). No packaging or release yet.
-
-## Phase 8 Bounded Live Integration Test Verified — 2026-10-30
-- **Approval-Gated Live Execution**: Completed single bounded multi-agent coding task (`double(n)` implementation and verification) using verified free-tier models only (`gemini-3.5-flash-lite`), under strict Free Only policy ($0.00 spending limit) in an isolated workspace (`.workspace-check/live-double-*`).
-- **Live Upstream Routing & Guard Enforcement**:
-  - Request #1 (Coder / `gemini-3.5-flash-lite`): 102 prompt tokens, 22 completion tokens (Total: 124). Accurately fixed `double.mjs` to `return n * 2;`.
-  - Deterministic Testing (Tester): 0 inference requests, 0 tokens. Ran `node --test test/double.test.mjs`; all assertions passed (4 === 4, -6 === -6, 0 === 0, 20 === 20).
-  - Request #2 (Reviewer / `gemini-3.5-flash-lite`): 86 prompt tokens, 1 completion token (Total: 87). Reviewed code against requirements and returned `APPROVED`.
-- **Observed Constraints & Metrics**:
-  - Total upstream requests: 2 / 3 maximum clamp.
-  - Total tokens: 211. Total financial spend: $0.0000.
-  - Workflow status transitions: `pending` -> `running` -> `completed` without manual intervention or retries.
-  - Zero unapproved spend, zero packaging, zero release publication.
+The original 141/147-test and browser runs covered units, custom runners and seeded UI state. They did not close production integration. Saved live-double runs include successful guard requests, a generated fix and deterministic test/review output, but used a custom runner that wrote files itself, rather than the UI → API → OpenCode tool path. Two successful and two failed runs remain preserved locally. Model scores and Gemini/Groq paid pricing include heuristics; they are not measured capability or billing verification. No new live run was performed during recovery.

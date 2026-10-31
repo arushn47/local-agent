@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { flattenSteps } from './planner.mjs';
+import { existsSync, readdirSync } from 'node:fs';
+import { flattenSteps, validatePlan } from './planner.mjs';
+import { assertWorkflowId, stateDirectory, writeState, readState } from './workflow-storage.mjs';
 import { ConflictMatrix } from './conflict-matrix.mjs';
 import { RepeatLoopEngine, LOOP_STATUS } from './repeat-loop.mjs';
-import { createCheckpoint, restoreCheckpoint, getCheckpoint } from './checkpoints.mjs';
+import { createCheckpoint, restoreCheckpoint, getCheckpoint, authorizeCheckpointRestore } from './checkpoints.mjs';
 import { buildRolePrompt } from './roles.mjs';
 import { validateModelAssignment, getModel } from './models.mjs';
 
@@ -25,15 +25,14 @@ export const STEP_STATUS = Object.freeze({
 });
 
 export function getWorkflowsDirectory(workspaceDir) {
-  return join(workspaceDir, '.localagent', 'workflows');
+  return stateDirectory(workspaceDir, 'workflows');
 }
 
 export function createWorkflowInstance({ plan, workspaceDir }) {
   if (!workspaceDir) throw new Error('workspaceDir_required');
   if (!plan?.id) throw new Error('plan_must_have_id');
-
-  const dir = getWorkflowsDirectory(workspaceDir);
-  mkdirSync(dir, { recursive: true });
+  const validation = validatePlan(plan);
+  if (!validation.valid) throw Error(`invalid_workflow_plan: ${validation.errors.join(', ')}`);
 
   const flatSteps = flattenSteps(plan);
   const stepStates = {};
@@ -74,26 +73,27 @@ export function createWorkflowInstance({ plan, workspaceDir }) {
     updatedAt: new Date().toISOString()
   };
 
-  saveWorkflow(instance, workspaceDir);
+  writeState(workspaceDir, 'workflows', instance.id, instance, { createOnly: true });
   return instance;
 }
 
 export function saveWorkflow(workflow, workspaceDir) {
   if (!workspaceDir) throw new Error('workspaceDir_required');
-  const dir = getWorkflowsDirectory(workspaceDir);
-  mkdirSync(dir, { recursive: true });
+  assertWorkflowId(workflow.id);
   workflow.updatedAt = new Date().toISOString();
-  const filePath = join(dir, `${workflow.id}.json`);
-  writeFileSync(filePath, JSON.stringify(workflow, null, 2), { mode: 0o600 });
+  writeState(workspaceDir, 'workflows', workflow.id, workflow);
 }
 
 export function loadWorkflow(workflowId, workspaceDir) {
   if (!workspaceDir || !workflowId) return null;
-  const dir = getWorkflowsDirectory(workspaceDir);
-  const filePath = join(dir, `${workflowId}.json`);
-  if (!existsSync(filePath)) return null;
+  assertWorkflowId(workflowId);
   try {
-    return JSON.parse(readFileSync(filePath, 'utf8'));
+    const wf = readState(workspaceDir, 'workflows', workflowId);
+    if (!wf) return null;
+    if (wf.id !== workflowId || !validatePlan(wf.plan).valid || !wf.stepStates) throw Error('invalid_workflow_state');
+    const steps = flattenSteps(wf.plan);
+    if (Object.keys(wf.stepStates).length !== steps.length || steps.some(s => !Object.hasOwn(wf.stepStates, s.id))) throw Error('invalid_workflow_state');
+    return wf;
   } catch {
     return null;
   }
@@ -110,8 +110,8 @@ export function listWorkflows(workspaceDir) {
     for (const f of files) {
       if (!f.endsWith('.json')) continue;
       try {
-        const raw = readFileSync(join(dir, f), 'utf8');
-        const wf = JSON.parse(raw);
+        const wf = loadWorkflow(f.slice(0, -5), workspaceDir);
+        if (!wf) continue;
         if (wf.id && wf.plan) {
           const flat = Object.values(wf.stepStates || {});
           const totalSteps = flat.length;
@@ -154,6 +154,7 @@ export function resumeWorkflow(workflowId, workspaceDir) {
   if (wf.status !== WORKFLOW_STATUS.PAUSED) {
     throw new Error(`workflow_not_paused: ${wf.status}`);
   }
+  if (wf.requiresReplan) throw Error('invalid_workflow_replan_required');
   wf.status = WORKFLOW_STATUS.RUNNING;
   saveWorkflow(wf, workspaceDir);
   return { success: true, workflowId, status: wf.status };
@@ -188,30 +189,23 @@ export function retryStep(workflowId, stepId, { alternateModelId = null, workspa
   return { success: true, workflowId, stepId, assignedModel: step.assignedModel, status: step.status };
 }
 
-export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir) {
+export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir, approval) {
   const wf = loadWorkflow(workflowId, workspaceDir);
   if (!wf) throw new Error(`workflow_not_found: ${workflowId}`);
-
-  // Restore physical files from checkpoint
-  const restoreRes = restoreCheckpoint({ workspaceDir, checkpointId });
-
-  // Mark steps from that stage onward back to pending
+  if (wf.status === WORKFLOW_STATUS.RUNNING || Object.values(wf.stepStates).some(s => s.status === STEP_STATUS.RUNNING)) throw Error('invalid_checkpoint_active_workflow');
   const chk = getCheckpoint({ workspaceDir, checkpointId });
-  if (chk?.stageId) {
-    let reset = false;
-    for (const step of Object.values(wf.stepStates)) {
-      if (step.id === chk.stageId || step.path?.includes(chk.stageId)) {
-        reset = true;
-      }
-      if (reset && step.status !== STEP_STATUS.COMPLETED) {
-        step.status = STEP_STATUS.PENDING;
-        step.error = null;
-      }
-    }
-  }
+  if (!chk || chk.workflowId !== workflowId) throw Error('invalid_checkpoint_owner');
 
-  wf.status = WORKFLOW_STATUS.RUNNING;
+  authorizeCheckpointRestore({ workspaceDir, checkpointId, workflowId, approval });
+  // Restoration invalidates prior completion evidence. Preserve the historical
+  // outcomes, but require a new reviewed plan instead of silently replaying it.
+  wf.requiresReplan = true;
+  wf.restoration = { checkpointId, restoredAt: new Date().toISOString() };
+  wf.status = WORKFLOW_STATUS.PAUSED;
   saveWorkflow(wf, workspaceDir);
+  // Persist invalidation before file writes: a crash cannot retain a completed
+  // workflow whose files were partly restored.
+  const restoreRes = restoreCheckpoint({ workspaceDir, checkpointId, workflowId, approval });
 
   return {
     success: true,
@@ -302,7 +296,10 @@ export async function executeStep({
         wf.checkpoints = wf.checkpoints || [];
         wf.checkpoints.push(checkpoint.checkpointId);
       }
-    } catch {}
+    } catch (error) {
+      cm.releaseLocks(stepId);
+      throw error;
+    }
   }
 
   // Transition state to RUNNING
@@ -401,6 +398,8 @@ export async function executeStep({
     // Release file-locks immediately
     cm.releaseLocks(stepId);
   }
+  if (!executionError && step.agent === 'tester' && testPassed !== true) executionError = Error(testPassed === false ? 'workflow_tests_failed' : 'workflow_tests_unverified');
+  if (!executionError && step.agent === 'reviewer' && reviewerApproved !== true) executionError = Error(reviewerApproved === false ? 'workflow_review_rejected' : 'workflow_review_unverified');
 
   // Reload latest workflow to prevent state overwrite
   const latestWf = loadWorkflow(workflowId, workspaceDir);
@@ -411,10 +410,17 @@ export async function executeStep({
     latestStep.error = executionError.message || String(executionError);
     latestStep.completedAt = Date.now();
     latestStep.durationMs = latestStep.completedAt - latestStep.startedAt;
+    latestStep.output = executionOutput;
+    latestStep.testPassed = testPassed;
+    latestStep.reviewerApproved = reviewerApproved;
     saveWorkflow(latestWf, workspaceDir);
     return {
       status: STEP_STATUS.FAILED,
       error: latestStep.error,
+      output: executionOutput,
+      testPassed,
+      reviewerApproved,
+      modifiedFiles,
       stepId
     };
   }
@@ -453,6 +459,7 @@ export async function runWorkflow({
 }) {
   let wf = loadWorkflow(workflowId, workspaceDir);
   if (!wf) throw new Error(`workflow_not_found: ${workflowId}`);
+  if (wf.requiresReplan) throw Error('invalid_workflow_replan_required');
 
   wf.status = WORKFLOW_STATUS.RUNNING;
   if (!wf.startedAt) wf.startedAt = new Date().toISOString();

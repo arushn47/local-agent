@@ -21,7 +21,7 @@ import {
   WORKFLOW_STATUS,
   STEP_STATUS
 } from '../src/workspace/workflow-engine.mjs';
-import { createCheckpoint, restoreCheckpoint } from '../src/workspace/checkpoints.mjs';
+import { createCheckpoint, restoreCheckpoint, previewCheckpointRestore } from '../src/workspace/checkpoints.mjs';
 import { POLICIES } from '../src/workspace/models.mjs';
 import { BudgetLedger } from '../src/workspace/budget-ledger.mjs';
 
@@ -131,7 +131,7 @@ test('audit 1: planner generates dynamic executable DAG from subtasks with targe
   }
 });
 
-test('audit 2 & 3: runWorkflow executes parallel non-conflicting steps concurrently while serializing conflicting steps', async () => {
+test('audit 2 & 3: invalid conflicting plan is rejected; independent parallel steps and an explicit sequential successor execute', async () => {
   const dir = setupTempWorkspace();
   const catalog = mockCatalog();
 
@@ -173,6 +173,8 @@ test('audit 2 & 3: runWorkflow executes parallel non-conflicting steps concurren
       workspaceDir: dir
     });
 
+    assert.throws(() => createWorkflowInstance({ plan, workspaceDir: dir }), /parallel_file_write_conflict/);
+    plan.stages.push(plan.stages[0].steps.pop());
     const instance = createWorkflowInstance({ plan, workspaceDir: dir });
     const executedModels = [];
     const executionLogs = [];
@@ -234,6 +236,7 @@ test('audit 4: runWorkflow executes bounded repeat loop with failure handoff and
 
     const instance = createWorkflowInstance({ plan, workspaceDir: dir });
     let loopIterationCount = 0;
+    let reviewerCalls = 0;
     const handoffsReceived = [];
 
     const runner = async ({ step, promptText }) => {
@@ -252,6 +255,7 @@ test('audit 4: runWorkflow executes bounded repeat loop with failure handoff and
       }
 
       if (step.id === 'review-criteria') {
+        reviewerCalls++;
         if (loopIterationCount === 1) {
           return { verified: true, output: 'Changes requested: Fix assertion failure', reviewerApproved: false };
         }
@@ -274,7 +278,7 @@ test('audit 4: runWorkflow executes bounded repeat loop with failure handoff and
     // Verified iteration 2 received failure handoff context
     assert.ok(handoffsReceived.length >= 1);
     assert.ok(handoffsReceived[0].includes('AssertionError: result is false'));
-    assert.ok(handoffsReceived[0].includes('Changes requested: Fix assertion failure'));
+    assert.equal(reviewerCalls, 1, 'review must wait for passing predecessor tests');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -345,7 +349,7 @@ test('audit 5: budget ledger strictly blocks paid model reservations under Free 
   assert.equal(paidRes.code, 'free_only_policy_violation');
 });
 
-test('audit 6: retryStep does not replay completed steps; rollbackToCheckpoint preserves unrelated user edits', () => {
+test('audit 6: approved checkpoint restoration preserves unrelated user edits', () => {
   const dir = setupTempWorkspace();
 
   try {
@@ -364,7 +368,8 @@ test('audit 6: retryStep does not replay completed steps; rollbackToCheckpoint p
     writeFileSync(join(dir, 'unrelated-file.txt'), 'New user file\n', 'utf8');
 
     // 3. Rollback
-    const res = restoreCheckpoint({ workspaceDir: dir, checkpointId: chk.checkpointId });
+    const preview = previewCheckpointRestore({ workspaceDir: dir, checkpointId: chk.checkpointId });
+    const res = restoreCheckpoint({ workspaceDir: dir, checkpointId: chk.checkpointId, approval: { approved: true, token: preview.token } });
     assert.equal(res.success, true);
 
     // Tracked file restored

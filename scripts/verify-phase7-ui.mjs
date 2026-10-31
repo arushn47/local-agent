@@ -257,6 +257,12 @@ try {
   // Light Mode Verification: toggle to light, audit accessibility, capture screenshot
   await themeToggle.click();
   assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light');
+  // The theme attribute updates before existing CSS color transitions finish.
+  // Audit the settled palette, rather than sampling an intermediate blend.
+  await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await Promise.all(document.getAnimations().filter(a => a.effect?.getComputedTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})));
+  });
   await audit(page, 'ide-workspace-light');
   await page.screenshot({ path: join(directory, 'phase7-light-verified.png'), fullPage: false });
   await themeToggle.click(); // revert to dark

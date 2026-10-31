@@ -2,40 +2,13 @@
 
 ## Authoritative recovery status — 2026-11-01
 
-Phase 8 remains partial. Earlier all-complete and live-integration claims in this historical log overstate custom-runner/UI evidence. Local baseline `21eacb4` preserves code/docs; secrets, installers and raw private/generated artifacts are ignored and remain on disk. False-success checkpoint passes **150/150** regressions and UI build: no executor means failure, timeout/observation/provider errors fail, test/review prose is unverified, final completion checks all steps. Fixtures are explicitly identified custom-runner evidence. Next: API/checkpoint security, then actual supervised OpenCode execution, durable non-replaying recovery, attributed budgets and role enforcement. No live test or release action authorized by these fixture results.
+Local baseline `21eacb4` preserves source/docs; credential scan passed, no push, private data/installers/raw evidence remain ignored locally. False-success checkpoint `d78ab90` passed 150/150 regressions and UI build. Security checkpoint now has 156/156 regressions, production UI build and a browser check using the actual authenticated restore API: dismiss preserves files, post-preview edits reject the entire preflight, explicit fresh approval restores and leaves a paused workflow requiring replanning.
 
-Updated 2026-10-30. Phases 1-4, 0.5.0/0.5.1, Phase 6.5 (110/110 tests), and Phase 7 (111/111 tests) are accepted development milestones. **0.5.2 is a Phase 5.2 development candidate; public release is blocked.** Phase 7 Dark IDE Workspace and light mode polish are complete and verified (111/111 tests); Phase 8 Multi-Agent Workflows & Free-First Model Orchestration planning is now underway.
+Production workflow activation/resume/retry is deliberately gated pending supervised OpenCode lifecycle, exact-model registration, durable concurrency/recovery, workflow budget attribution and enforced role tools. Plan saving and existing single-agent tasks remain available. Paid workflow activation is rejected. No live inference, packaging, publishing or remote push. Next is recovery checkpoint 4, with acceptance gates in [recovery evidence](docs/phase8/RECOVERY.md).
+
+Updated 2026-10-30. Phases 1-4, 0.5.0/0.5.1, Phase 6.5 (110/110 tests), and Phase 7 (111/111 tests) are accepted development milestones. **0.5.2 is a Phase 5.2 development candidate; public release is blocked.** Phase 7 Dark IDE Workspace and light mode polish are complete and verified (111/111 tests); Phase 8 is partially implemented and under integration recovery.
 
 
-
-## Phase 8 — Multi-Agent Workflows & Free-First Model Orchestration — 2026-10-30
-
-The owner authorized Phase 8: build a model-aware multi-agent orchestration system that plans coding tasks, recommends optimal individual models, delegates to specialized agents, executes independent tasks in parallel when beneficial, and verifies the final result.
-
-Policy Evolution: Free-First, User-Controlled Model
-- LocalAgent defaults to free models ($0 charges) under the **Free Only** policy.
-- Supports both free and paid models within Gemini, Groq, OpenRouter, and Ollama.
-- Introduces **Free Only** (strict $0.00 cap), **Free Preferred** (free first, optional paid fallback), and **Paid Allowed** (user-assigned paid models gated by limits).
-- Spending limits: per-task, per-workflow, and monthly spending limits.
-- Atomic Budget Reservation Ledger: prevents concurrent agents from exceeding shared budgets by reserving max spend before dispatch and reconciling actual cost from provider usage data.
-- Explicit approval required before enabling paid inference or crossing configured budget ceilings. Never silently escalate from free to paid.
-
-Architectural Baseline & OpenCode Engine Audit:
-- OpenCode 1.18.31 natively supports per-agent configurations (`agent.<role>`), per-prompt model bindings (`model: { providerID, modelID }`), subtask parts, and concurrent sessions.
-- Roles defined: Planner (read-only, high-reasoning), Researcher (read-only, fast/broad-context), Implementer (code edits, coding-capable), Debugger (diagnostic/bash/edits), Tester (test execution/verification), Reviewer (diff inspection vs criteria), and Custom.
-- Safe Parallelism: File-Lock Conflict Matrix tracks planned file writes; non-conflicting tasks run concurrently in isolated OpenCode sessions; conflicting tasks are serialized.
-- Durable workflow state persisted in `.localagent/workflows/<id>.json` with restart recovery.
-- Hierarchical Execution Tree & Bounded Repeat Loops (Kiro UX Reference):
-  - Expandable live execution tree showing nested steps, provider/model assignment, duration, outputs, and errors.
-  - Bounded `repeat` loops for iterative Implement → Test → Review → Fix cycles (max 3 iterations, budget bounded).
-  - Workflow Checkpoints: snapshots before loops and major steps; explicit Checkpoint Restore & Retry on failure.
-  - Pre-flight model inspection and mid-execution model reassignment.
-  - Reusable, editable workflow templates in `.localagent/workflows/templates/`.
-Checkpoint 8.1 (Model Discovery & Capability Catalog) Complete & Verified (2026-10-30):
-- Dynamic discovery enriched across Gemini, Groq, OpenRouter, and Ollama with modelsDetailed metadata, exact token pricing, context limits, and tool support.
-- Created src/workspace/models.mjs: role scoring matrix (Planner, Implementer, Researcher, Debugger, Tester, Reviewer), policy-based candidate filtering (Free Only, Free Preferred, Paid Allowed), fallback chain generation, and assignment validation.
-- Verified with 117/117 tests passing (test/model-catalog.test.mjs added with 6 comprehensive unit tests).
-- Checkpoint 8.2 (Free-First Spending Policy & Budget Ledger) authorized and underway.
 
 ## Phase 7 — Dark IDE Workspace Redesign & Light Mode Polish — 2026-10-30
 
@@ -178,16 +151,6 @@ Diagnose the long UI closure/refresh failure with sanitized close/visibility/ren
 
 Owner must choose own license/name/legal publisher/contacts and compliance-review path, provide a licensed independent Windows device/guest or approve a specific environment/terms, then select signing identity/key custody and release hosting. No purchase, license selection, publication, trust key or automatic updater was created. [Decisions](docs/RELEASE_DECISIONS.md), [review](docs/LICENSE_REVIEW.md), [release/recovery](docs/RELEASE.md). Tool approval review briefly failed at the account usage limit; the user resumed and remaining checks completed.
 
-## Phase 8 — Multi-Agent Workflows & Model Orchestration — 2026-10-30
+## Historical Phase 8 evidence correction
 
-- Checkpoints 8.1 through 8.7 completed and verified autonomously. 141/141 regressions pass with 0 failures (100% preservation of historical baselines). Production UI bundle builds cleanly in 2.54s. Automated Playwright verification (`scripts/verify-phase8-workflows.mjs`) passes cleanly with 0 axe-core accessibility violations in dark and light modes.
-- **8.1 Model Discovery & Catalog**: Dynamic discovery across Gemini, Groq, OpenRouter, and Ollama; exact pricing metadata, context limits, tool capabilities, free-tier verification, role scoring matrix, and manual override fallback chains (`src/catalog.mjs`, `src/workspace/models.mjs`, `test/model-catalog.test.mjs`).
-- **8.2 Free-First Policy & Budget Ledger**: Free Only ($0.00 cap default), Free Preferred, and Paid Allowed policy tiers; atomic pre-dispatch budget reservations and actual cost reconciliation from provider usage headers (`src/workspace/budget-ledger.mjs`, `src/guard.mjs`, `test/budget-ledger.test.mjs`).
-- **8.3 Hierarchical Planner & Template Engine**: Natural language and template decomposition into stages, parallel groups, and bounded repeat loops (`maxIterations: 3`); DAG cycle detection and conflict validation (`src/workspace/planner.mjs`, `src/workspace/workflow-templates.mjs`, `test/planner.test.mjs`).
-- **8.4 Specialized Roles, Loops & Conflict Matrix**: Specialized Planner, Implementer, Researcher, Debugger, Tester, and Reviewer roles; file-lock conflict matrix enforcing safe parallel batch scheduling; iterative repeat loop engine with termination predicates and context handoffs (`src/workspace/roles.mjs`, `src/workspace/conflict-matrix.mjs`, `src/workspace/repeat-loop.mjs`, `test/conflict-matrix.test.mjs`, `test/repeat-loop.test.mjs`, `test/roles.test.mjs`).
-- **8.5 Durable State Engine & Checkpoints**: Workflow instance persistence in `.localagent/workflows/<id>.json`; safe checkpoint snapshots preserving unrelated user files during restoration; interactive pause, resume, cancel, and retry step controls without replaying completed predecessor steps (`src/workspace/checkpoints.mjs`, `src/workspace/workflow-engine.mjs`, `test/workflow-engine.test.mjs`).
-- **8.6 Expandable Live Workflow Tree UI**: Expandable hierarchical execution tree in chat and right inspector panel; nested step status badges (`✓`, `⟳`, `⊗`, `⏳`, `⏸`), interactive model chip switcher, duration timers, console outputs, error traces, pause/resume/cancel controls, and checkpoint restore banner (`apps/workspace/src/WorkflowTree.jsx`, `apps/workspace/src/WorkflowsPanel.jsx`, `apps/workspace/src/style.css`).
-- **8.7 Verification & Regressions**: 141/141 unit tests pass; automated Playwright verification confirms visual hierarchy, interactive model chips, checkpoint controls, and 0 axe-core accessibility violations in dark/light modes (`validation/phase8/`).
-- **Independent Integration & Reliability Audit**: 147/147 unit and integration tests pass cleanly (	est/phase8-audit.test.mjs). Closed the execution path in workflow-engine.mjs with OpenCode session dispatch, exact model ID bindings, parallel file-lock conflict matrix waves, bounded repeat loop iteration context handoffs, atomic budget ledger pre-dispatch enforcement, zero side-effect replay on retry, safe checkpoint rollback preserving user edits, and UI auto-polling (1.5s).
-- **Bounded Live Integration Test**: Successfully executed live multi-agent workflow for double(n) fix and test verification in an isolated project (.workspace-check/live-double-*) using verified free model gemini-3.5-flash-lite under Free Only policy (.00 spending cap). 2 upstream requests / 3 max clamp; 211 tokens; .0000 financial cost; 0 retries; completed end-to-end with unit test passing and reviewer approval.
-- Remote repository configured: `origin` pointing to `https://github.com/arushn47/local-agent.git` on `main` branch. Packaging and publishing gates remain separate.
+Earlier summaries asserted 8.1–8.7 completion and full OpenCode integration. The 2026-11-01 audit disproved that scope. Unit/custom-runner and seeded UI evidence remain useful but do not establish production multi-agent execution. Live-double artifacts include two successes and two failures; the runner called the guard and wrote generated source itself. They do not validate the UI → API → OpenCode tool-execution path, nor independent billing verification. The remote is configured, but no push was performed. Historical source and claims are retained in the local baseline commit.
