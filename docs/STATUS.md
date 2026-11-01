@@ -1,6 +1,6 @@
 # Current project status
 
-Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
+2026-11-01 live acceptance failed overall: real coding/tests passed, but cumulative conservative reservations exceeded 64,000 (85,855), permission approvals were absent and cleanup changed final status to cancelled. Production remains gated; no second live attempt. Full observed evidence and local-only corrections are in docs/phase8/RECOVERY.md.
 
 Updated 2026-11-01. Phase 8 recovery checkpoints 1–3 have source/fixture acceptance: local Git baseline `21eacb4`, false-success fixes `d78ab90`, strict workflow API/state/snapshot validation and explicitly approved, content-bound checkpoint restoration. **156/156 tests**, production UI build and real authenticated browser restore checks pass. [Detailed evidence and remaining gates](phase8/RECOVERY.md).
 

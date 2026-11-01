@@ -1,6 +1,6 @@
 # LocalAgent architecture
 
-Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
+2026-11-01 live acceptance failed overall: real coding/tests passed, but cumulative conservative reservations exceeded 64,000 (85,855), permission approvals were absent and cleanup changed final status to cancelled. Production remains gated; no second live attempt. Full observed evidence and local-only corrections are in docs/phase8/RECOVERY.md.
 
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.

@@ -21,6 +21,7 @@ test('durable reservations survive restart, unknown usage is retained, and recon
   assert.equal(next.reconcile({workflowId:'wf',taskId:'test',reservationId:r.reservationId,model:free}).reservationRetained,true);
   const args={workflowId:'wf',taskId:'test',reservationId:r.reservationId,model:free,usage:{prompt_tokens:10,completion_tokens:5}};
   next.reconcile(args);assert.equal(first.reconcile(args).duplicate,true);assert.equal(first.getStatus('wf').workflow.observedTokens,15);
+  assert.equal(first.reserve({workflowId:'wf',taskId:'test',model:free,estimatedInputTokens:40,maxOutputTokens:40}).code,'workflow_token_budget_exceeded','settlement must not replenish a cumulative conservative allowance');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 test('concurrent ledger instances include pending task reservations; paid policy alone is not authorization',()=>{
@@ -69,5 +70,5 @@ test('real transport and guard enforce session/model scope and actual-boundary r
  limited=true;
  await transport.bind({sessionID:'ses_rate',workspaceDir:dir,workflowId:'wf_rate',stepId:'test',attemptId:'attempt_rate',qualifiedModel:'openrouter/'+free.id,modelAlias:'exact-alias',limits:{maxRequests:1,maxTokens:5000}});
  const rate=await post('ses_rate');assert.equal(rate.status,429);await rate.text();
- assert.equal((await post('ses_rate')).status,402);assert.equal(upstreamCalls,2);
+ assert.equal((await post('ses_rate')).status,403);assert.equal(upstreamCalls,2);
 });

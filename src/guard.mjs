@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { timingSafeEqual, randomUUID } from 'node:crypto';
+import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { loadConfig, loadEnvironment, secrets, guardToken, stateDir } from './config.mjs';
 import { loadCatalog } from './catalog.mjs';
@@ -108,6 +108,7 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       record(auditPath, { event: 'budget_blocked', provider, model: body.model, requestId, reason: reservation.code });
       return send(res, 402, { error: { type: 'budget_blocked', code: reservation.code, message: reservation.reason, details: reservation.details } });
     }
+    if(scope&&!scopeStore.claimRequest(scopeId,createHash('sha256').update(JSON.stringify(body)).digest('hex')))return send(res,403,{error:{code:'workflow_replay_blocked'}});
 
     const start = Date.now();
     record(auditPath, { event: 'request', provider, model: body.model, requestId, ...attribution, budget, ...contextMetadata(body.messages) });
@@ -117,6 +118,7 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       const base = provider === 'ollama' ? config.providers.ollama.baseURL + '/v1' : PROVIDER_BASES[provider];
       const upstream = await fetcher(base + '/chat/completions', { method: 'POST', redirect: 'error', signal: AbortSignal.any([abort.signal, AbortSignal.timeout(600000)]), headers: { 'Content-Type': 'application/json', ...(provider === 'ollama' ? {} : { Authorization: `Bearer ${providerKey(provider, credentials)}` }) }, body: JSON.stringify(body) });
       const quota = quotaMetadata(upstream.headers, upstream.status);
+      if(scope&&!upstream.ok)scopeStore.close(scopeId);
       record(auditPath, { event: 'upstream_headers', provider, model: body.model, requestId, status: upstream.status, quota });
       const headers = { 'Content-Type': upstream.headers.get('content-type') || 'application/json' };
       for (const [key, value] of Object.entries(quota.headers)) headers[key] = value;
@@ -151,6 +153,7 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       }
       record(auditPath, { event: res.destroyed && !res.writableEnded ? 'interrupted' : 'completed', provider, model: body.model, requestId, ...attribution, status: upstream.status, durationMs: Date.now() - start, tokens, costUsd });
     } catch {
+      if(scope)scopeStore.close(scopeId);
       // A network failure may have reached the provider. Retain its reservation.
       record(auditPath, { event: 'network_error', provider, model: body.model, requestId, durationMs: Date.now() - start });
       if (!res.headersSent) send(res, 502, { error: { type: 'upstream_error', message: 'Provider connection failed' } });

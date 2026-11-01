@@ -58,13 +58,14 @@ export class BudgetLedger{
       const sum=(rs,k)=>rs.reduce((n,r)=>n+r[k],0),cost=estimateCost(model,estimatedInputTokens,maxOutputTokens),tokens=estimatedInputTokens+maxOutputTokens;
       if(w.paused)return deny('workflow_paused_budget');
       if(w.requestLimit!==undefined&&w.calls>=w.requestLimit)return deny('workflow_request_budget_exceeded');
-      if(w.tokenLimit!==undefined&&w.tokens+sum(own,'tokens')+tokens>w.tokenLimit)return deny('workflow_token_budget_exceeded');
+      if(w.tokenLimit!==undefined&&w.calls>0&&w.reservedTokensLifetime===undefined)return deny('workflow_token_history_unknown');
+      if(w.tokenLimit!==undefined&&(w.reservedTokensLifetime||0)+tokens>w.tokenLimit)return deny('workflow_token_budget_exceeded');
       if(t.spend+sum(task,'amountUsd')+cost>this.limits.perTaskBudgetUsd)return deny('task_budget_exceeded');
       if(w.spend+sum(own,'amountUsd')+cost>w.limit){w.paused=true;w.pendingApproval={workflowId,taskId,estimatedCostUsd:cost};return deny('workflow_budget_exceeded');}
       if(s.monthlyCumulativeSpendUsd+sum(all,'amountUsd')+cost>this.limits.monthlySpendingLimitUsd)return deny('monthly_spending_limit_exceeded');
       const reservationId='res_'+randomUUID();
       s.reservations[reservationId]={workflowId,taskId,taskKey,modelId:model.id,amountUsd:cost,tokens,month:s.month,createdAt:this.now().toISOString()};
-      w.calls++;return {allowed:true,reservationId,amountUsd:cost,estimatedTokens:tokens};
+      w.calls++;w.reservedTokensLifetime=(w.reservedTokensLifetime||0)+tokens;return {allowed:true,reservationId,amountUsd:cost,estimatedTokens:tokens};
     });
   }
   reconcile({workflowId='default-workflow',taskId='default-task',reservationId,model,usage}={}){

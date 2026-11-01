@@ -1,6 +1,6 @@
 # Development phases
 
-Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
+Live acceptance 2026-11-01 FAILED overall. Real Implementer/Tester sessions fixed double(n) and passed tests, but cumulative conservative reservations were 85,855 > 64,000, permission approvals were absent, and cleanup overwrote completed status with cancelled. Seven requests, one model, 15,908 observed tokens, 40.079 seconds, $0 ledger cost. Production remains gated; no second live attempt. See docs/phase8/RECOVERY.md.
 
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 

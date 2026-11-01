@@ -15,4 +15,5 @@ export class WorkflowScopes{
   }
   get(id){return this.transaction(s=>{const scope=s.scopes[id];return scope?.active&&scope.expiresAt>Date.now()?scope:null;});}
   close(id){return this.transaction(s=>{if(s.scopes[id])s.scopes[id].active=false;return true;});}
+  claimRequest(id,fingerprint){return this.transaction(s=>{const scope=s.scopes[id];if(!scope?.active||scope.expiresAt<=Date.now())return false;scope.requests ||= [];if(scope.requests.includes(fingerprint))return false;scope.requests.push(fingerprint);return true;});}
 }
