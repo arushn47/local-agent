@@ -1,11 +1,12 @@
 import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import { flattenSteps, validatePlan } from './planner.mjs';
-import { assertWorkflowId, stateDirectory, writeState, readState } from './workflow-storage.mjs';
+import { assertWorkflowId, stateDirectory, writeState, readState, statePath } from './workflow-storage.mjs';
 import { ConflictMatrix } from './conflict-matrix.mjs';
 import { RepeatLoopEngine, LOOP_STATUS } from './repeat-loop.mjs';
 import { createCheckpoint, restoreCheckpoint, getCheckpoint, authorizeCheckpointRestore } from './checkpoints.mjs';
 import { buildRolePrompt, workflowToolMask } from './roles.mjs';
 import { validateModelAssignment, getModel } from './models.mjs';
+import { ledgerTransaction } from './atomic-ledger.mjs';
 import { acquireExecution, executionOwner, ownerProcessAlive, releaseExecution, safeParallelBatches } from './workflow-coordination.mjs';
 
 const executions = new Map();
@@ -81,11 +82,17 @@ export function createWorkflowInstance({ plan, workspaceDir }) {
   return instance;
 }
 
-export function saveWorkflow(workflow, workspaceDir) {
-  if (!workspaceDir) throw new Error('workspaceDir_required');
+export function saveWorkflow(workflow, workspaceDir, {allowTerminalTransition=false}={}) {
   assertWorkflowId(workflow.id);
-  workflow.updatedAt = new Date().toISOString();
-  writeState(workspaceDir, 'workflows', workflow.id, workflow);
+  const file=statePath(workspaceDir,'workflows',workflow.id);
+  return ledgerTransaction(file,workflow,current=>{
+    if(['completed','failed','cancelled'].includes(current.status)&&!allowTerminalTransition){
+      Object.assign(workflow,current);return current;
+    }
+    workflow.updatedAt=new Date().toISOString();
+    for(const key of Object.keys(current))delete current[key];
+    Object.assign(current,workflow);return workflow;
+  });
 }
 
 export function loadWorkflow(workflowId, workspaceDir) {
@@ -169,6 +176,7 @@ export function resumeWorkflow(workflowId, workspaceDir) {
 export function cancelWorkflow(workflowId, workspaceDir, reason = 'user_cancelled') {
   const wf = loadWorkflow(workflowId, workspaceDir);
   if (!wf) throw new Error(`workflow_not_found: ${workflowId}`);
+  if(['completed','failed','cancelled'].includes(wf.status))return {success:true,workflowId,status:wf.status,unchanged:true};
   wf.status = WORKFLOW_STATUS.CANCELLED;
   wf.completedAt = new Date().toISOString();
   wf.cancellationReason = reason;
@@ -193,7 +201,7 @@ export function retryStep(workflowId, stepId, { alternateModelId = null, workspa
   if (wf.status === WORKFLOW_STATUS.FAILED) {
     wf.status = WORKFLOW_STATUS.RUNNING;
   }
-  saveWorkflow(wf, workspaceDir);
+  saveWorkflow(wf, workspaceDir, {allowTerminalTransition:true});
   return { success: true, workflowId, stepId, assignedModel: step.assignedModel, status: step.status };
 }
 
@@ -213,7 +221,7 @@ export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir, app
   wf.requiresReplan = true;
   wf.restoration = { checkpointId, restoredAt: new Date().toISOString() };
   wf.status = WORKFLOW_STATUS.PAUSED;
-  saveWorkflow(wf, workspaceDir);
+  saveWorkflow(wf, workspaceDir, {allowTerminalTransition:true});
   // Persist invalidation before file writes: a crash cannot retain a completed
   // workflow whose files were partly restored.
   const restoreRes = restoreCheckpoint({ workspaceDir, checkpointId, workflowId, approval });
@@ -241,7 +249,7 @@ export async function recoverWorkflow({workflowId,workspaceDir,tasks}) {
     }
   }
   wf.requiresReplan=true;wf.status=WORKFLOW_STATUS.PAUSED;
-  wf.recovery={at:new Date().toISOString(),replayed:false};saveWorkflow(wf,workspaceDir);
+  wf.recovery={at:new Date().toISOString(),replayed:false};saveWorkflow(wf,workspaceDir,{allowTerminalTransition:true});
   if(owner)releaseExecution(workspaceDir,owner.token);
   return {status:wf.status,workflowId,replayed:false,requiresReplan:true};
 }

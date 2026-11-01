@@ -14,6 +14,7 @@ import { createPlan, validatePlan } from './planner.mjs';
 import { listTemplates } from './workflow-templates.mjs';
 import { getAllModels, validateModelAssignment } from './models.mjs';
 import { listCheckpoints, previewCheckpointRestore } from './checkpoints.mjs';
+const workflowReady=engine=>engine?.workflowReady===true&&engine?.permissionEnforcementVerified===true;
 const keys={gemini:'GEMINI_API_KEY',groq:'GROQ_API_KEY',openrouter:'OPENROUTER_API_KEY'};
 function send(res,status,value){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
 async function json(req){let text='';for await(const b of req){text+=b;if(Buffer.byteLength(text)>65536)throw Error('request_too_large');}try{return JSON.parse(text||'{}');}catch{throw Error('invalid_json');}}
@@ -49,7 +50,7 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
         const catalog=loadCatalog(),env=loadEnvironment(),plan=compilePlan(config,catalog);
         const providers=Object.entries(config.providers).map(([id,p])=>{const c=catalog.providers[id];return {id,configured:id==='ollama'||!!env[keys[id]],eligible:!!c?.allowed&&!!c?.models?.length,reason:c?.reason||providerEligibility(id,env).reason||'not_checked',models:c?.models||[],codingEligible:plan.targets.some(t=>t.provider===id),local:id==='ollama'};});
         const events=readEvents(join(stateDir,'routing.jsonl')).slice(-40).map(e=>({timestamp:e.timestamp,event:e.event,provider:e.provider,model:e.model,status:e.status,quota:e.quota,budget:e.budget?{fits:e.budget.fits,contextWindow:e.budget.contextWindow}:undefined}));
-        return send(res,200,{providers,plan,events,policy:'free-only',keyStorage:process.platform==='win32'?'Windows DPAPI · current user':'Local keychain unavailable',running:true});
+        return send(res,200,{providers,plan,events,policy:'free-only',workflowExecutionReady:workflowReady(engine),keyStorage:process.platform==='win32'?'Windows DPAPI · current user':'Local keychain unavailable',running:true});
       }
       if(path==='/api/v1/projects'&&req.method==='GET')return send(res,200,projects.list());
       if(path==='/api/v1/projects'&&req.method==='POST')return send(res,201,projects.add((await json(req)).path));
@@ -105,13 +106,13 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           if(plan.policy!=='free_only')throw Error('invalid_workflow_paid_authorization_unavailable');
           // Production activation is fail-closed until supervised session and
           // guard attribution integration has independently passed its gates.
-          if(body.autoStart!==false && engine?.workflowReady!==true) return send(res,409,{error:'workflow_execution_not_ready'});
+          if(body.autoStart!==false && !workflowReady(engine)) return send(res,409,{error:'workflow_execution_not_ready'});
           const instance=createWorkflowInstance({plan,workspaceDir:prj.path});
           if(body.autoStart!==false){void runWorkflow({workflowId:instance.id,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog}).catch(()=>{});}
           return send(res,201,instance);
         }
       }
-      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session|recover))?$/);
+      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session|recover|start))?$/);
       if(wfAction){
         const prj=projects.get(wfAction[1]);const wfid=wfAction[2];const op=wfAction[3];
         if(op==='session'&&req.method==='GET'){
@@ -125,7 +126,8 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
         if(req.method==='POST'){
           const body=await json(req);
           if(!body || typeof body!=='object' || Array.isArray(body))throw Error('invalid_workflow_request');
-          if(['resume','retry'].includes(op) && engine?.workflowReady!==true)return send(res,409,{error:'workflow_execution_not_ready'});
+          if(['start','resume','retry'].includes(op) && !workflowReady(engine))return send(res,409,{error:'workflow_execution_not_ready'});
+          if(op==='start'){const wf=loadWorkflow(wfid,prj.path);if(wf?.status!=='pending')throw Error('invalid_workflow_start_state');void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,202,{accepted:true});}
           if(op==='recover')return send(res,200,await recoverWorkflow({workflowId:wfid,workspaceDir:prj.path,tasks}));
           if(op==='pause')return send(res,200,pauseWorkflow(wfid,prj.path));
           if(op==='resume'){const r=resumeWorkflow(wfid,prj.path);void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,200,r);}

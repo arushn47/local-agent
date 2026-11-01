@@ -1,6 +1,6 @@
 # Development memory
 
-Live acceptance 2026-11-01 FAILED overall. Real Implementer/Tester sessions fixed double(n) and passed tests, but cumulative conservative reservations were 85,855 > 64,000, permission approvals were absent, and cleanup overwrote completed status with cancelled. Seven requests, one model, 15,908 observed tokens, 40.079 seconds, $0 ledger cost. Production remains gated; no second live attempt. See docs/phase8/RECOVERY.md.
+Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
 
 ## Authoritative recovery status — 2026-11-01
 

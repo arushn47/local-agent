@@ -1,5 +1,24 @@
 # Phase 8 Integration Recovery & Hardening
 
+## Follow-up blocker hardening — local tests only
+
+**Not all three blockers are fixed.** Production remains gated; no live inference was rerun.
+
+Budget: lifetime conservative reservations and admitted request counts survive settlement, release/cancellation and restart. Added sequential/concurrent-instance regressions prove settling or releasing requests cannot replenish either approved ceiling. Old ambiguous reservation history fails closed.
+
+Terminal state: workflow saves now serialize cross-process mutations through a file lock and atomic persistence. Completed/failed/cancelled states reject stale nonterminal or cancellation writes; cleanup cancellation is idempotent and does not rewrite terminal outcomes. Explicit reviewed restore/retry transitions remain separate. Tests cover stale writes and repeated cleanup for completed and failed states.
+
+Permissions: `scripts/verify-native-workflow-permissions.mjs` exercises actual OpenCode 1.18.31 → actual OmniRoute 3.8.52 → guard → deterministic loopback provider → actual filesystem/bash tools. No external inference or credentials. Native role rules report `ask`, and agent selection at session creation is confirmed. Removing legacy per-prompt `tools` flags advertises no tools and returns unavailable-tool errors. Re-enabling those flags makes tools execute without requests, even with explicit session `ask` rules. Thus configuration inspection is insufficient and the legacy/native authorization bridge is not verified.
+
+The final native diagnostic is **FAILED**, intentionally not hidden in unit success totals: edit_allow, bash_allow, edit_deny and bash_deny each observed zero approvals; edit/bash ran. bash_interrupt returned cancelled with neither file edit nor command marker. Evidence: `validation/phase8-permission-blocker/native-result.json`. These are negative compatibility findings, not successful permission acceptance.
+
+Actual runtime workflow dispatch now calls a permission-enforcement check that fails before session creation or scope binding with `workflow_native_permission_bridge_unverified`. Unit fake engines do not establish native enforcement. The diagnostic has an explicit bypass restricted to its credential-free deterministic fixture so the defect remains reproducible. Production exposes neither this bypass nor execution readiness. API readiness requires both execution readiness and permission verification. A Start workflow button is present but disabled in production; its disabled state is browser-tested.
+
+Harness: runtime gate prevents a premature live rerun. During polling, request/conservative token totals, provider failures, usage/cost presence and completed mutating tools without recorded approvals fail immediately. Final evidence also requires completed persisted state, approvals for both roles and all configured limits. No cleanup can convert a completed workflow to cancelled.
+
+Validation: **178/178 unit/regression tests**, production build and all three isolated browser suites pass; automated accessibility incomplete findings remain. The separate native permission end-to-end diagnostic remains red. Fixing the native tool-registration/authorization bridge and proving real approval/rejection are still mandatory before live acceptance. A runtime compatibility adapter/upstream change needs its own tested implementation; no runtime binary was rebuilt or upgraded here.
+
+
 ## Observed live acceptance — 2026-11-01: FAILED
 
 One owner-approved attempt ran through the real browser-authenticated API, shared task supervisor, two native OpenCode sessions, scoped ingress, actual OmniRoute, guard and live Gemini `gemini-3.5-flash-lite`. No custom runner was used. Model discovery required configured free-tier confirmation and zero catalog pricing. The product launch gate stayed closed; only the disposable server received its acceptance capability. The UI start button was not used: the loaded browser called the actual authenticated workflow API.

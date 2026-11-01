@@ -1,5 +1,16 @@
 # Proposed minimal live acceptance — approval required
 
+## Replacement proposal — conditional, NOT authorized to execute
+
+Do not run until the deterministic native edit/bash allow/deny/interruption contract passes. It currently fails, so another live attempt is premature.
+
+Once that blocker is fixed, request approval for one disposable project/profile, one freshly verified free model, Free Only/$0, at most 8 upstream requests, **64,000 cumulative conservative reservation tokens without settlement replenishment**, and 120 seconds total. No retry, fallback, paid inference, package, publication or push.
+
+The browser must open the real Workflows panel, save/inspect the exact two-step double(n) plan, then **click Start workflow**. No page.evaluate API dispatch substitution. Only the isolated acceptance server may possess a verified test execution capability; production stays gated. The browser must show the Implementer edit permission and Tester exact-command permission; before each approval, verify no side effect has happened. Click Allow once and record request IDs, patterns, replies and observed tool evidence. Denial and interruption must already pass the deterministic native test.
+
+Before dispatch, inspect cumulative budget counters, exact model routes and effective native/session permissions. Missing permission proof must stop before creating a session. Any limit, unexpected permission, failed provider response, missing usage or unapproved tool execution stops immediately. Inspect the exact generated diff and independently rerun the unchanged tests. Reopen the workflow after cleanup and require the same completed terminal status. Retain all raw local evidence and an independently computed verdict. Another live run requires fresh owner approval after the native blocker is actually fixed.
+
+
 ## Observed live acceptance — 2026-11-01: FAILED
 
 One owner-approved attempt ran through the real browser-authenticated API, shared task supervisor, two native OpenCode sessions, scoped ingress, actual OmniRoute, guard and live Gemini `gemini-3.5-flash-lite`. No custom runner was used. Model discovery required configured free-tier confirmation and zero catalog pricing. The product launch gate stayed closed; only the disposable server received its acceptance capability. The UI start button was not used: the loaded browser called the actual authenticated workflow API.

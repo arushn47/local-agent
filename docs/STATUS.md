@@ -1,6 +1,6 @@
 # Current project status
 
-2026-11-01 live acceptance failed overall: real coding/tests passed, but cumulative conservative reservations exceeded 64,000 (85,855), permission approvals were absent and cleanup changed final status to cancelled. Production remains gated; no second live attempt. Full observed evidence and local-only corrections are in docs/phase8/RECOVERY.md.
+Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
 
 Updated 2026-11-01. Phase 8 recovery checkpoints 1–3 have source/fixture acceptance: local Git baseline `21eacb4`, false-success fixes `d78ab90`, strict workflow API/state/snapshot validation and explicitly approved, content-bound checkpoint restoration. **156/156 tests**, production UI build and real authenticated browser restore checks pass. [Detailed evidence and remaining gates](phase8/RECOVERY.md).
 

@@ -47,10 +47,18 @@ try{
  const created=await api(`projects/${project.id}/workflows`,{plan});assert.equal(created.status,201);wfId=plan.id;
  const answered=new Set();let final;
  while(!expired){
+  const events=existsSync(join(profile,'routing.jsonl'))?readFileSync(join(profile,'routing.jsonl'),'utf8').split('\n').filter(Boolean).map(JSON.parse):[];
+  const requests=events.filter(e=>e.event==='request');
+  assert.ok(requests.length<=8,'request ceiling reached/exceeded');
+  assert.ok(requests.reduce((n,e)=>n+e.budget.estimatedInputTokens+e.budget.reservedOutputTokens,0)<=64000,'conservative ceiling exceeded');
+  assert.ok(!events.some(e=>e.event==='upstream_headers'&&e.status!==200),'provider failure');
+  assert.ok(events.filter(e=>e.event==='completed').every(e=>e.tokens&&e.costUsd===0),'missing usage or nonzero cost');
+
   const r=await api(`projects/${project.id}/workflows/${wfId}`);assert.equal(r.status,200);final=r.data;
   const states={workflow:final.status,steps:Object.fromEntries(Object.entries(final.stepStates).map(([id,s])=>[id,s.status]))};if(JSON.stringify(report.transitions.at(-1)?.states)!==JSON.stringify(states))report.transitions.push({elapsedMs:Date.now()-started,states});
   for(const step of Object.values(final.stepStates))if(step.sessionID){
    const snapshot=await api(`projects/${project.id}/workflows/${wfId}/session?stepId=${step.id}`);assert.equal(snapshot.status,200);
+   for(const message of snapshot.data.messages||[])for(const tool of message.parts||[])if(tool.type==='tool'&&['edit','write','bash'].includes(tool.tool)&&tool.status==='completed')assert.ok(report.permissions.some(p=>p.step===step.id&&p.approved),'tool executed without recorded approval');
    for(const permission of snapshot.data.permissions||[])if(!answered.has(permission.id)){
     const patterns=permission.patterns||[];const edit=step.id==='implement'&&['edit','write'].includes(permission.permission)&&patterns.length&&patterns.every(p=>p.replaceAll('\\','/').endsWith('/double.mjs')||p==='double.mjs');
     const command=step.id==='test'&&permission.permission==='bash'&&patterns.length===1&&patterns[0]==='node --test test/double.test.mjs';

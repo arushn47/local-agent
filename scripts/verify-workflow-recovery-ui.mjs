@@ -32,6 +32,7 @@ try {
   await page.getByText('Workflow execution is temporarily unavailable.', { exact: false }).waitFor();
   const restore = page.getByRole('button', { name: 'Restore Checkpoint', exact: true });
   await restore.waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Start workflow', exact: true }).isDisabled(), true, 'production start remains disabled');
   const rejected = page.waitForEvent('dialog').then(async dialog => { assert.match(dialog.message(), /source.js/); await dialog.dismiss(); });
   await restore.click(); await rejected;
   assert.equal(readFileSync(join(directory, 'source.js'), 'utf8'), 'user changes\n');

@@ -1,6 +1,6 @@
 # LocalAgent architecture
 
-2026-11-01 live acceptance failed overall: real coding/tests passed, but cumulative conservative reservations exceeded 64,000 (85,855), permission approvals were absent and cleanup changed final status to cancelled. Production remains gated; no second live attempt. Full observed evidence and local-only corrections are in docs/phase8/RECOVERY.md.
+Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
 
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.

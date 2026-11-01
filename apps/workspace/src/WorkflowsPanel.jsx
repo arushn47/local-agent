@@ -3,6 +3,7 @@ import { api } from './api';
 import { WorkflowTree } from './WorkflowTree';
 
 export function WorkflowsPanel(props) {
+  const [executionReady, setExecutionReady] = createSignal(false);
   const [workflows, setWorkflows] = createSignal([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = createSignal(null);
   const [selectedWorkflow, setSelectedWorkflow] = createSignal(null);
@@ -23,6 +24,7 @@ export function WorkflowsPanel(props) {
     if (!projectId()) return;
     setLoading(true);
     try {
+      const status = await api('status');setExecutionReady(status.workflowExecutionReady === true);
       const [wfList, tplList, mdlList] = await Promise.all([
         api(`projects/${projectId()}/workflows`),
         api('templates'),
@@ -154,6 +156,7 @@ export function WorkflowsPanel(props) {
           }
         >
           <WorkflowTree
+            executionReady={executionReady()}
             workflow={selectedWorkflow()}
             models={models()}
             checkpoints={checkpoints()}

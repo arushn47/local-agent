@@ -81,7 +81,11 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       if(sessions.some(s=>s.workflow?.attemptId===attemptId))throw Error('workflow_attempt_already_registered');
       if(sessions.some(s=>!s.workflow&&runs.get(s.id)?.state==='running'))throw Error('task_already_running');
       const c=engine.forProject(projects.get(projectId).path);
-      const data=(await c.session.create({title:`[${agent}] ${stepId}`})).data;
+      if(c.v2){
+        if(!engine.verifyWorkflowPermissionEnforcement)throw Error('workflow_native_permission_bridge_unverified');
+        await engine.verifyWorkflowPermissionEnforcement({projectId,agent});
+      }
+      const data=(await c.session.create({title:`[${agent}] ${stepId}`,agent,model:{providerID:model.providerID,id:model.modelID},permission:[{permission:'edit',pattern:'*',action:tools.edit?'ask':'deny'},{permission:'bash',pattern:'*',action:tools.bash?'ask':'deny'}]})).data;
       if(!data?.id)throw Error('workflow_session_creation_failed');
       const s={id:data.id,projectId,title:stepId,workflow:{workflowId,stepId,attemptId,model,agent}};
       sessions=[s,...sessions];save();
@@ -93,6 +97,8 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       run.timer=setTimeout(()=>void abort(s.id,'task_deadline_exceeded'),Math.min(deadlineMs,120000));
       const onAbort=()=>void abort(s.id,'cancelled');signal?.addEventListener('abort',onAbort,{once:true});
       run.detach=()=>signal?.removeEventListener('abort',onAbort);
+      // Native engines are rejected above until the legacy tool bridge has
+      // verified authorization enforcement. Fake-engine fixtures are not proof.
       try { await c.session.promptAsync({sessionID:s.id,agent,model,tools,parts:[{type:'text',text}]}); }
       catch { await abort(s.id,'provider_error'); throw Error('workflow_dispatch_ambiguous'); }
       return s.id;

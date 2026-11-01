@@ -61,6 +61,10 @@ export function WorkflowTree(props) {
     }
   };
 
+  const handleStart = async () => {
+    try { await api(`projects/${props.projectId}/workflows/${wf().id}/start`, {}); props.onRefresh?.(); }
+    catch { setActionError('Workflow execution is unavailable. No new work was authorized.'); }
+  };
   const handlePause = async () => {
     if (!wf()?.id || !props.projectId) return;
     try {
@@ -153,6 +157,7 @@ export function WorkflowTree(props) {
               Est: ${Number(wf()?.metadata?.totalEstimatedCostUsd || 0).toFixed(2)}
             </span>
           </Show>
+          <Show when={wf()?.status === 'pending'}><button class="wf-btn" disabled={!props.executionReady} onClick={handleStart}>Start workflow</button></Show>
           <div class="wf-actions-toolbar" role="toolbar" aria-label="Workflow controls">
             <Show when={wf()?.status === 'running'}>
               <button class="wf-btn icon-btn" onClick={handlePause} title="Pause workflow" aria-label="Pause workflow">
