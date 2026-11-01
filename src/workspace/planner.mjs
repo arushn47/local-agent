@@ -127,6 +127,11 @@ export function validatePlan(plan, catalog = null) {
     if (typeof plan.title !== 'string' || !plan.title.trim() || plan.title.length > 500) throw Error('invalid_workflow_title');
     if (!Object.values(POLICIES).includes(plan.policy)) throw Error('invalid_workflow_policy');
     if (plan.mode !== undefined && !Object.values(WORKFLOW_MODES).includes(plan.mode)) throw Error('invalid_workflow_mode');
+    if(plan.budget!==undefined){
+      if(!plan.budget||typeof plan.budget!=='object'||Array.isArray(plan.budget))throw Error('invalid_workflow_budget');
+      for(const key of ['maxRequests','maxTokens'])if(plan.budget[key]!==undefined&&(!Number.isSafeInteger(plan.budget[key])||plan.budget[key]<1||plan.budget[key]>(key==='maxRequests'?1000:1000000)))throw Error('invalid_workflow_budget');
+      if(plan.policy==='free_only'&&plan.budget.maxSpendUsd!==undefined&&plan.budget.maxSpendUsd!==0)throw Error('invalid_workflow_budget');
+    }
     if (!Array.isArray(plan.stages) || !plan.stages.length) throw Error('invalid_workflow_stages');
     let count = 0;
     const walk = (nodes, depth = 0) => {

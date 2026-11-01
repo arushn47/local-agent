@@ -355,6 +355,7 @@ export async function executeStep({
   let testPassed = null;
   let reviewerApproved = null;
   let modifiedFiles = [];
+  let ownedSession=null;
 
   try {
     if (typeof runner === 'function') {
@@ -384,6 +385,8 @@ export async function executeStep({
           current.stepStates[stepId].sessionID = sessionID;
           current.stepStates[stepId].dispatchState = 'dispatched';
           saveWorkflow(current, workspaceDir);
+          ownedSession=sessionID;
+          await engine.bindWorkflowSession?.({sessionID,workspaceDir,workflowId,stepId,attemptId:`${workflowId}-${stepId}-${step.attempts}`,qualifiedModel:step.assignedModel,modelAlias:model.modelID,limits:wf.plan.budget});
         }
       });
       let observed;
@@ -415,6 +418,7 @@ export async function executeStep({
   } catch (err) {
     executionError = err;
   } finally {
+    if(ownedSession){try{await engine?.releaseWorkflowSession?.(ownedSession);}catch{executionError ||= Error('workflow_scope_close_failed');}}
     // Release file-locks immediately
     cm.releaseLocks(stepId);
   }

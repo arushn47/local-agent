@@ -1,6 +1,6 @@
 # Development phases
 
-Latest recovery checkpoint: 171/171 regressions, UI build and all three browser checks pass. File-backed project ownership coordinates runners/processes and single-agent dispatch; only read-only roles share parallel batches. Crashed leases require session abort/reconciliation; ambiguous retries and interrupted loops require review/replanning, never replay. Production remains gated. Attributed durable guard accounting is next.
+Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
 
 ## Phase 8 Integration Recovery & Hardening — 2026-11-01
 
@@ -11,7 +11,7 @@ Phase 8 remains partial. Recovery checkpoints 1–3 have source/fixture evidence
 | 1. Git preservation | Local baseline `21eacb4`; credential scan passed; private/generated data stays ignored on disk. |
 | 2. False-success reporting | `d78ab90`; 150/150 suite and production UI build passed. Missing executors, timeout/provider/observation failures, and unverified test/review prose cannot establish success. |
 | 3. API/checkpoint safety | Strict identifiers and bounded plan validation; confined state paths, link/hardlink rejection, atomic state publication; owner-bound snapshots; explicit preview/approval with stale-content rejection; restore pauses and requires replanning. 156/156 suite, production UI build and real authenticated browser restore check pass. See [recovery evidence](docs/phase8/RECOVERY.md). |
-| 4–7. Production integration | Supervised OpenCode sessions, exact models, permissions/cancellation, durable concurrency/recovery, attributed inference budgets and enforced specialized roles remain open. Paid activation is rejected. |
+| 4–7. Production integration | Source/local contracts pass: supervised sessions, exact aliases, native roles, conservative recovery and attributed durable guard accounting. Actual live tool-path acceptance is pending. Paid activation is rejected. |
 | 8–9. Adversarial and end-to-end acceptance | Early negative API/security fixtures pass. Crash/restart, runtime concurrency, budget/rate-limit and actual tool-execution acceptance remain open. Live tests need explicit bounded authorization. |
 
 Updated 2026-10-29. This plan specifies completion gates, not fixed delivery promises. [PRD](PRD.md) defines scope; [architecture](ARCHITECTURE.md) defines ownership. Phases 1-4 and 0.5.0/0.5.1 are accepted development milestones. Phase 5.2 addresses release blockers; independent clean-machine, stability, licensing and human-accessibility gates remain open. See [current status](docs/STATUS.md), [MEMORY](MEMORY.md) and [Phase 5.2 evidence](validation/phase52/README.md).

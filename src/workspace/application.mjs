@@ -9,6 +9,7 @@ import { startEngine } from './engine.mjs';
 import { createWorkspaceServer } from './server.mjs';
 import {createPreviews} from './previews.mjs';
 import {stateDir} from '../config.mjs';
+import {createWorkflowTransport} from './workflow-transport.mjs';
 
 // One application lifecycle shared by web and desktop; policy/agent stay upstream.
 export async function startWorkspace({ports={ui:20140,engine:20144,gateway:20151,guard:20152},onChild=()=>{},onStage=()=>{},onFailure=()=>{},signal}={}){
@@ -16,13 +17,14 @@ export async function startWorkspace({ports={ui:20140,engine:20144,gateway:20151
   const controller=new AbortController();
   if(signal){signal.addEventListener('abort',()=>controller.abort(),{once:true});if(signal.aborted)controller.abort();}
   const config=loadConfig();config.gatewayPort=ports.gateway;config.guardPort=ports.guard;
-  let platform,engine,tasks,server,previews,stopped=false;
-  const stop=()=>{if(stopped)return;stopped=true;controller.abort();server?.closeAllConnections();server?.close();previews?.close();tasks?.stop();engine?.stop();platform?.stop();};
+  let platform,engine,tasks,server,previews,workflowTransport,stopped=false;
+  const stop=()=>{if(stopped)return;stopped=true;controller.abort();server?.closeAllConnections();server?.close();previews?.close();tasks?.stop();engine?.stop();void workflowTransport?.close();platform?.stop();};
   const fail=code=>{if(stopped)return;stop();onFailure(code);};
   try{
     secrets();onStage('credentials');const credentials=await credentialStore();controller.signal.throwIfAborted();
     platform=await startPlatform(config,{onChild,onStage,onFailure:fail,signal:controller.signal});
-    onStage('engine');engine=await startEngine({port:ports.engine,onChild,signal:controller.signal});
+    workflowTransport=await createWorkflowTransport({config,secret:secrets()});
+    onStage('engine');engine=await startEngine({port:ports.engine,onChild,signal:controller.signal,workflowTransport});
     engine.child.once('exit',()=>fail('engine_exited'));
     const projects=projectStore();tasks=createTasks(engine,projects,{coordinateProject:true});controller.signal.throwIfAborted();
     previews=await createPreviews({projects,directory:join(stateDir,'previews'),uiOrigin:'http://127.0.0.1:'+ports.ui,onChild});

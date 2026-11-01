@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
+import { BudgetLedger } from '../src/workspace/budget-ledger.mjs';
 import { createGuard } from '../src/guard.mjs';
 import { guardToken } from '../src/config.mjs';
 
@@ -12,7 +13,7 @@ async function fixture(t, response = new Response('data: {"choices":[{"delta":{"
   const secret = { guard: 'unit-test-secret' }; const calls = [];
   const env = { OPENROUTER_API_KEY: 'private-provider-key' };
   const catalog = { expiresAt: new Date(Date.now() + 60000).toISOString(), providers: { openrouter: { enabled: true, allowed: true, capabilities: { 'example/coder:free': { contextWindow: 8192, tools: true } }, models: ['example/coder:free'] } } };
-  const server = createGuard({ config: { outputTokens: 1800 }, env: () => env, secret, catalog: () => catalog, auditPath, fetcher: async (url, options) => { calls.push({ url, ...options }); return response.clone(); } });
+  const server = createGuard({ budgetLedger: new BudgetLedger({storageFile:null}), config: { outputTokens: 1800 }, env: () => env, secret, catalog: () => catalog, auditPath, fetcher: async (url, options) => { calls.push({ url, ...options }); return response.clone(); } });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); assert.ok(resolve(directory).startsWith(resolve(tmpdir()) + sep)); rmSync(directory, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;

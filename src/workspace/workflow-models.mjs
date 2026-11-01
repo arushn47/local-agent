@@ -35,5 +35,5 @@ export function exactWorkflowModel(qualified,registry,catalog) {
   if(!cap?.codingApproved||!cap.tools)throw Error('workflow_model_unavailable');
   if(details&&(details.tier!=='free'||details.freeTierVerified!==true||['prompt','completion','request'].some(k=>details.pricing?.[k]!==0)))throw Error('workflow_model_not_free');
   if(selected.provider!=='ollama'&&!(Date.parse(catalog.expiresAt)>Date.now()))throw Error('workflow_catalog_expired');
-  return {providerID:'omniroute',modelID:selected.alias};
+  return {providerID:'localagent-workflow',modelID:selected.alias};
 }

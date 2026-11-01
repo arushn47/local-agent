@@ -28,7 +28,7 @@ test('estimateCost projects pre-execution budget based on token allocations', ()
 });
 
 test('Free Only policy strictly rejects paid models with zero charges', () => {
-  const ledger = new BudgetLedger({ policy: POLICIES.FREE_ONLY });
+  const ledger = new BudgetLedger({ storageFile: null, policy: POLICIES.FREE_ONLY });
 
   // Free model must succeed
   const freeRes = ledger.reserve({ workflowId: 'wf-1', taskId: 't-1', model: freeModel });
@@ -42,8 +42,8 @@ test('Free Only policy strictly rejects paid models with zero charges', () => {
 });
 
 test('Free Preferred and Paid Allowed enforce per-task and per-workflow limits', () => {
-  const ledger = new BudgetLedger({
-    policy: POLICIES.PAID_ALLOWED,
+  const ledger = new BudgetLedger({ storageFile: null,
+    policy: POLICIES.PAID_ALLOWED, paidAuthorized: true,
     perTaskBudgetUsd: 0.05,
     perWorkflowBudgetUsd: 0.10,
     monthlySpendingLimitUsd: 5.00
@@ -88,8 +88,8 @@ test('Free Preferred and Paid Allowed enforce per-task and per-workflow limits',
 });
 
 test('Post-execution reconciliation commits actual spend and releases unused reservation delta', () => {
-  const ledger = new BudgetLedger({
-    policy: POLICIES.PAID_ALLOWED,
+  const ledger = new BudgetLedger({ storageFile: null,
+    policy: POLICIES.PAID_ALLOWED, paidAuthorized: true, perTaskBudgetUsd: 1, monthlySpendingLimitUsd: 5,
     perWorkflowBudgetUsd: 1.00
   });
 
@@ -124,8 +124,8 @@ test('Post-execution reconciliation commits actual spend and releases unused res
 });
 
 test('approveBudgetIncrease unpauses workflow and expands budget limit', () => {
-  const ledger = new BudgetLedger({
-    policy: POLICIES.PAID_ALLOWED,
+  const ledger = new BudgetLedger({ storageFile: null,
+    policy: POLICIES.PAID_ALLOWED, paidAuthorized: true, perTaskBudgetUsd: 1, monthlySpendingLimitUsd: 5,
     perWorkflowBudgetUsd: 0.02
   });
 

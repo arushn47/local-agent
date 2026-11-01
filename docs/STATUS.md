@@ -1,10 +1,10 @@
 # Current project status
 
-Latest recovery checkpoint: 171/171 regressions, UI build and all three browser checks pass. File-backed project ownership coordinates runners/processes and single-agent dispatch; only read-only roles share parallel batches. Crashed leases require session abort/reconciliation; ambiguous retries and interrupted loops require review/replanning, never replay. Production remains gated. Attributed durable guard accounting is next.
+Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
 
 Updated 2026-11-01. Phase 8 recovery checkpoints 1–3 have source/fixture acceptance: local Git baseline `21eacb4`, false-success fixes `d78ab90`, strict workflow API/state/snapshot validation and explicitly approved, content-bound checkpoint restoration. **156/156 tests**, production UI build and real authenticated browser restore checks pass. [Detailed evidence and remaining gates](phase8/RECOVERY.md).
 
-Production workflow activation/resume/retry is gated until real supervised OpenCode execution and guard attribution are validated. Plans can be saved; existing single-agent functionality remains available. Paid workflow activation is rejected. Checkpoints 4–9 remain open: lifecycle/model/permission integration, concurrency/crash recovery, budgets, actual role tools and adverse end-to-end validation. No live inference, packaging, publication or remote push occurred. Phase 5 public-release blockers remain open.
+Production workflow activation/resume/retry is gated until real supervised OpenCode execution and guard attribution are validated. Plans can be saved; existing single-agent functionality remains available. Paid workflow activation is rejected. Checkpoints 4–8 now have source/local-contract evidence. Actual native tool execution, human review and the complete live path remain acceptance gates. Isolated parallel writers, automatic recovery/replay and product paid authorization remain unavailable. No live inference, packaging, publication or remote push occurred. Phase 5 public-release blockers remain open.
 
 ## Historical Phase 5–6 evidence
 

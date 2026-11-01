@@ -1,8 +1,7 @@
 # LocalAgent architecture
 
-Latest recovery checkpoint: 171/171 regressions, UI build and all three browser checks pass. File-backed project ownership coordinates runners/processes and single-agent dispatch; only read-only roles share parallel batches. Crashed leases require session abort/reconciliation; ambiguous retries and interrupted loops require review/replanning, never replay. Production remains gated. Attributed durable guard accounting is next.
+Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
 
-2026-11-01: Phase 8 recovery checkpoints 1–3 are verified at source/fixture level. Production workflow execution is gated pending lifecycle, model, budget and role integration. See [recovery evidence](docs/phase8/RECOVERY.md). No release artifact was rebuilt.
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.
 
@@ -97,9 +96,9 @@ Phase 6.2 keeps the guard bound unchanged and instead schedules upstream's suppo
 
 ## Phase 8 implementation boundary — 2026-11-01
 
-Implemented: heuristic catalog recommendations, template/numbered-list plans, graph validation, role prompt definitions, file-lock/loop units and an inspector tree. The inspector polls; it does not stream workflow execution events. Specialized role configuration, exact model registration, shared session supervision, durable non-replaying recovery and workflow-attributed budgets remain integration work. A custom runner is labelled as such and does not establish production verification.
+Implemented: heuristic catalog recommendations, template/numbered-list plans, graph validation, role prompt definitions, file-lock/loop units and an inspector tree. The inspector polls; it does not stream workflow execution events. Specialized native roles, exact model aliases, shared session supervision, conservative non-replaying recovery and workflow-attributed guard budgets now have local-contract evidence. Live tool-path acceptance remains open. A custom runner is labelled as such and does not establish production verification.
 
-Recovery now rejects missing executors and observation/provider/timeout failures. Test/review text is not verification. Workflow completion checks all leaf outcomes; completed steps cannot be retried. Production API activation/resume/retry is blocked until an independently validated integration enables it. Free Only remains the default; paid workflow policies are rejected while explicit authorization and boundary attribution are incomplete.
+Recovery now rejects missing executors and observation/provider/timeout failures. Test/review text is not verification. Workflow completion checks all leaf outcomes; completed steps cannot be retried. Production API activation/resume/retry is blocked until an independently validated integration enables it. Free Only remains the default; paid workflow policies are rejected while paid authorization remains unavailable; boundary attribution has local-contract evidence.
 
 Workflow plans are untrusted: identifiers exclude traversal/prototype keys; node depth/count, arrays, text, roles, dependencies and file paths are bounded and validated again on persistence/load. Invalid or conflicting plans cannot be instantiated. State uses exclusive temporary files, fsync and atomic rename, with no-clobber creation. This does not yet establish crash-safe execution recovery.
 
@@ -107,4 +106,4 @@ Snapshot access rejects private paths, lexical escapes, Windows aliases/streams,
 
 This is not an OS sandbox or a multi-file restore transaction. A filesystem failure mid-restore may leave an approved partial restoration; snapshots remain and the workflow stays paused. Hostile same-user processes racing filesystem operations remain outside an OS isolation guarantee. Atomic file persistence must not be confused with durable agent execution recovery.
 
-Next: reuse the existing task lifecycle for workflow sessions and permission UI, persist session/attempt identity before dispatch, propagate abort and exact model attribution through the existing OmniRoute/guard boundary, install actual role permissions, then validate adverse lifecycle and real tool execution. No bypass of the guard, paid inference or unapproved live tests.
+Current: the task lifecycle, original session identity, scoped OmniRoute/guard attribution and native role configuration have source/local-contract coverage. Next: bounded live tool execution and human review; isolated parallel writers and automatic ambiguous replay remain unavailable. No bypass of the guard, paid inference or unapproved live tests.

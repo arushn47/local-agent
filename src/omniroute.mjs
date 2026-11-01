@@ -25,6 +25,19 @@ export async function management(config) {
 function list(data, field) { return Array.isArray(data) ? data : data[field] || []; }
 // A slash inside an upstream model name must not be mistaken for its provider.
 export const qualifyModel = (providerId, model) => `${providerId}/${model}`;
+export async function registerWorkflowAttempt(config,{id,provider,model},{managementAPI}={}){
+  if(!/^[a-f0-9]{64}$/.test(id))throw Error('invalid_workflow_scope');
+  const api=managementAPI||await management(config),name=`LocalAgent attempt ${id}`,baseUrl=`${urls(config).guard}/workflow-egress/${provider}/${id}/v1`;
+  const nodeData=await api('/api/provider-nodes',{method:'POST',body:{name,prefix:'la-'+id.slice(0,20),apiType:'chat',type:'openai-compatible',baseUrl}}),node=nodeData.node||nodeData;
+  const connectionData=await api('/api/providers',{method:'POST',body:{name,provider:node.id,apiKey:guardToken(secrets(),`workflow:${provider}`),providerSpecificData:{baseUrl},defaultModel:model}}),connection=connectionData.connection||connectionData;
+  await api('/api/providers/'+connection.id+'/sync-models',{method:'POST',body:{}});
+  const alias='localagent/attempt/'+id,target={model:qualifyModel(node.id,model),providerId:node.id,connectionId:connection.id};
+  await api('/api/combos',{method:'POST',body:{name:alias,strategy:'priority',models:[target],config:{disableSessionStickiness:true}}});
+  const keyData=await api('/api/keys',{method:'POST',body:{name,noLog:true,modelAccessMode:'restricted',allowedModels:[target.model],allowedCombos:[alias],allowedConnections:[connection.id]}});
+  const key=keyData.key||keyData.apiKey?.key||keyData.apiKey;
+  if(typeof key!=='string')throw Error('workflow_gateway_key_unavailable');
+  return {alias,key,disable:async()=>{const keys=list(await api('/api/keys'),'keys'),meta=keys.find(k=>k.name===name);if(meta)await api('/api/keys/'+meta.id,{method:'PATCH',body:{isActive:false}});}};
+}
 export async function configureGateway(config, catalog, { managementAPI } = {}) {
   const plan = compilePlan(config, catalog);
   const api = managementAPI || await management(config); const secret = secrets();

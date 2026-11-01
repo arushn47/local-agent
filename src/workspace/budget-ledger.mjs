@@ -1,324 +1,105 @@
-import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { stateDir } from '../config.mjs';
-import { POLICIES } from './models.mjs';
+import {randomUUID} from 'node:crypto';
+import {join} from 'node:path';
+import {stateDir} from '../config.mjs';
+import {POLICIES} from './models.mjs';
+import {ledgerTransaction} from './atomic-ledger.mjs';
 
-export function calculateCost(model, tokens = {}) {
-  if (!model || model.tier === 'free') return 0;
-  const promptTokens = Number(tokens.prompt_tokens || tokens.input_tokens || 0);
-  const completionTokens = Number(tokens.completion_tokens || tokens.output_tokens || 0);
-  const promptRate = Number(model.pricing?.prompt || 0);
-  const completionRate = Number(model.pricing?.completion || 0);
-  const requestRate = Number(model.pricing?.request || 0);
-  const cost = (promptTokens * promptRate) + (completionTokens * completionRate) + (promptTokens > 0 ? requestRate : 0);
-  return Math.round(cost * 1e6) / 1e6; // Round to 6 decimal places (micro-dollars)
+const money=value=>Math.round(value*1e6)/1e6;
+const amount=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
+export function calculateCost(model,tokens={}){
+  if(!model)return 0;
+  if(model.tier==='free')return 0;
+  return money((tokens.prompt_tokens||tokens.input_tokens||0)*(model.pricing?.prompt||0)+(tokens.completion_tokens||tokens.output_tokens||0)*(model.pricing?.completion||0)+((tokens.prompt_tokens||tokens.input_tokens||0)>0?(model.pricing?.request||0):0));
 }
+export const estimateCost=(model,input=2048,output=1800)=>calculateCost(model,{prompt_tokens:input,completion_tokens:output});
 
-export function estimateCost(model, inputTokens = 2048, outputTokens = 1800) {
-  if (!model || model.tier === 'free') return 0;
-  return calculateCost(model, { prompt_tokens: inputTokens, completion_tokens: outputTokens });
-}
-
-export class BudgetLedger {
-  constructor({
-    policy = POLICIES.FREE_ONLY,
-    perTaskBudgetUsd = undefined,
-    perWorkflowBudgetUsd = undefined,
-    monthlySpendingLimitUsd = undefined,
-    storageFile = join(stateDir, 'budget-ledger.json')
-  } = {}) {
-    this.storageFile = storageFile;
-    this.policy = POLICIES.FREE_ONLY;
-    this.limits = {
-      perTaskBudgetUsd: 0.0,
-      perWorkflowBudgetUsd: 0.0,
-      monthlySpendingLimitUsd: 0.0
-    };
-    this.monthlyCumulativeSpendUsd = 0.0;
-    this.workflows = new Map();
-    this.tasks = new Map();
-    this.pendingApprovals = new Map();
-
-    if (this.storageFile) {
-      this.load();
-    }
-
-    // Explicit constructor arguments always take precedence over loaded defaults
-    if (policy !== undefined) this.policy = policy;
-    if (perTaskBudgetUsd !== undefined) this.limits.perTaskBudgetUsd = Math.max(0, Number(perTaskBudgetUsd) || 0);
-    if (perWorkflowBudgetUsd !== undefined) this.limits.perWorkflowBudgetUsd = Math.max(0, Number(perWorkflowBudgetUsd) || 0);
-    if (monthlySpendingLimitUsd !== undefined) this.limits.monthlySpendingLimitUsd = Math.max(0, Number(monthlySpendingLimitUsd) || 0);
+export class BudgetLedger{
+  constructor({policy=POLICIES.FREE_ONLY,perTaskBudgetUsd=0,perWorkflowBudgetUsd=0,monthlySpendingLimitUsd=0,storageFile=join(stateDir,'budget-ledger.json'),paidAuthorized=false,now=()=>new Date()}={}){
+    if(!Object.values(POLICIES).includes(policy))throw Error('invalid_budget_policy');
+    this.policy=policy;this.paidAuthorized=paidAuthorized;this.storageFile=storageFile;this.now=now;
+    this.limits={perTaskBudgetUsd,perWorkflowBudgetUsd,monthlySpendingLimitUsd};
+    if(Object.values(this.limits).some(v=>!amount(v)))throw Error('invalid_budget_limit');
+    this.state={version:2,month:now().toISOString().slice(0,7),monthlyCumulativeSpendUsd:0,workflows:{},tasks:{},reservations:{},settlements:{}};
   }
-
-  load() {
-    if (!this.storageFile) return;
-    try {
-      if (existsSync(this.storageFile)) {
-        const data = JSON.parse(readFileSync(this.storageFile, 'utf8'));
-        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-        if (data.month === currentMonth) {
-          this.monthlyCumulativeSpendUsd = Number(data.monthlyCumulativeSpendUsd) || 0.0;
-        } else {
-          // New month -> reset monthly counter
-          this.monthlyCumulativeSpendUsd = 0.0;
-        }
-        if (data.policy) this.policy = data.policy;
-        if (data.limits) {
-          this.limits.perTaskBudgetUsd = Number(data.limits.perTaskBudgetUsd) || this.limits.perTaskBudgetUsd;
-          this.limits.perWorkflowBudgetUsd = Number(data.limits.perWorkflowBudgetUsd) || this.limits.perWorkflowBudgetUsd;
-          this.limits.monthlySpendingLimitUsd = Number(data.limits.monthlySpendingLimitUsd) || this.limits.monthlySpendingLimitUsd;
-        }
+  transaction(fn){
+    return ledgerTransaction(this.storageFile,this.state,state=>{
+      if(state.version!==2){
+        // Preserve historical aggregate charges; do not invent task attribution.
+        const prior=Number(state.monthlyCumulativeSpendUsd)||0;
+        Object.assign(state,this.state,{monthlyCumulativeSpendUsd:prior,legacyUnattributed:true});
       }
-    } catch {}
-  }
-
-  save() {
-    if (!this.storageFile) return;
-    try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const data = {
-        month: currentMonth,
-        policy: this.policy,
-        limits: this.limits,
-        monthlyCumulativeSpendUsd: this.monthlyCumulativeSpendUsd,
-        updatedAt: new Date().toISOString()
-      };
-      writeFileSync(this.storageFile, JSON.stringify(data, null, 2), { mode: 0o600 });
-    } catch {}
-  }
-
-  setPolicy(policy, newLimits = {}) {
-    if (!Object.values(POLICIES).includes(policy)) {
-      throw new Error(`invalid_policy: ${policy}`);
-    }
-    this.policy = policy;
-    if (newLimits.perTaskBudgetUsd !== undefined) this.limits.perTaskBudgetUsd = Math.max(0, Number(newLimits.perTaskBudgetUsd) || 0);
-    if (newLimits.perWorkflowBudgetUsd !== undefined) this.limits.perWorkflowBudgetUsd = Math.max(0, Number(newLimits.perWorkflowBudgetUsd) || 0);
-    if (newLimits.monthlySpendingLimitUsd !== undefined) this.limits.monthlySpendingLimitUsd = Math.max(0, Number(newLimits.monthlySpendingLimitUsd) || 0);
-    this.save();
-  }
-
-  _getWorkflowRecord(workflowId) {
-    if (!this.workflows.has(workflowId)) {
-      this.workflows.set(workflowId, {
-        cumulativeSpendUsd: 0.0,
-        budgetLimitUsd: this.limits.perWorkflowBudgetUsd,
-        activeReservations: new Map(),
-        isPaused: false
-      });
-    }
-    return this.workflows.get(workflowId);
-  }
-
-  _getTaskSpend(taskId) {
-    return this.tasks.get(taskId) || 0.0;
-  }
-
-  _getActiveReservationsTotal() {
-    let total = 0.0;
-    for (const wf of this.workflows.values()) {
-      for (const res of wf.activeReservations.values()) {
-        total += res.amountUsd;
-      }
-    }
-    return total;
-  }
-
-  reserve({
-    workflowId = 'default-workflow',
-    taskId = 'default-task',
-    model,
-    estimatedInputTokens = 2048,
-    maxOutputTokens = 1800
-  }) {
-    // 1. Free Only Policy Enforcement:
-    if (this.policy === POLICIES.FREE_ONLY) {
-      if (!model || model.tier !== 'free' || (model.pricing?.prompt || 0) > 0 || (model.pricing?.completion || 0) > 0) {
-        return {
-          allowed: false,
-          code: 'free_only_policy_violation',
-          reason: `Model ${model?.name || model?.id || 'unknown'} requires payment, but current policy is Free Only ($0.00 cap).`
-        };
-      }
-      return {
-        allowed: true,
-        reservationId: `free_res_${randomUUID()}`,
-        amountUsd: 0.0,
-        estimatedTokens: estimatedInputTokens + maxOutputTokens
-      };
-    }
-
-    // 2. Free model under other policies incurs 0 spend
-    if (model && model.tier === 'free') {
-      return {
-        allowed: true,
-        reservationId: `free_res_${randomUUID()}`,
-        amountUsd: 0.0,
-        estimatedTokens: estimatedInputTokens + maxOutputTokens
-      };
-    }
-
-    // 3. Paid Model Check under Free Preferred / Paid Allowed
-    const wf = this._getWorkflowRecord(workflowId);
-    if (wf.isPaused) {
-      return {
-        allowed: false,
-        code: 'workflow_paused_budget',
-        reason: 'Workflow is paused pending budget approval.'
-      };
-    }
-
-    const estimatedCostUsd = estimateCost(model, estimatedInputTokens, maxOutputTokens);
-    const taskSpend = this._getTaskSpend(taskId);
-
-    // Calculate active workflow reservations:
-    let wfReservations = 0.0;
-    for (const r of wf.activeReservations.values()) wfReservations += r.amountUsd;
-
-    // Check Task Budget Limit:
-    if (this.limits.perTaskBudgetUsd > 0 && (taskSpend + estimatedCostUsd > this.limits.perTaskBudgetUsd)) {
-      return {
-        allowed: false,
-        code: 'task_budget_exceeded',
-        reason: `Estimated cost ($${estimatedCostUsd.toFixed(4)}) exceeds remaining per-task budget ($${Math.max(0, this.limits.perTaskBudgetUsd - taskSpend).toFixed(4)}).`,
-        details: { limit: this.limits.perTaskBudgetUsd, currentSpend: taskSpend, estimatedCostUsd }
-      };
-    }
-
-    // Check Workflow Budget Limit:
-    const effectiveWorkflowLimit = wf.budgetLimitUsd || this.limits.perWorkflowBudgetUsd;
-    if (effectiveWorkflowLimit > 0 && (wf.cumulativeSpendUsd + wfReservations + estimatedCostUsd > effectiveWorkflowLimit)) {
-      wf.isPaused = true;
-      this.pendingApprovals.set(workflowId, {
-        workflowId,
-        taskId,
-        modelId: model.id,
-        estimatedCostUsd,
-        currentSpend: wf.cumulativeSpendUsd,
-        limit: effectiveWorkflowLimit,
-        createdAt: Date.now()
-      });
-      return {
-        allowed: false,
-        code: 'workflow_budget_exceeded',
-        reason: `Estimated cost ($${estimatedCostUsd.toFixed(4)}) exceeds remaining workflow budget ($${Math.max(0, effectiveWorkflowLimit - wf.cumulativeSpendUsd - wfReservations).toFixed(4)}).`,
-        details: { limit: effectiveWorkflowLimit, currentSpend: wf.cumulativeSpendUsd, estimatedCostUsd }
-      };
-    }
-
-    // Check Monthly Spending Limit:
-    const globalActiveReservations = this._getActiveReservationsTotal();
-    if (this.limits.monthlySpendingLimitUsd > 0 &&
-        (this.monthlyCumulativeSpendUsd + globalActiveReservations + estimatedCostUsd > this.limits.monthlySpendingLimitUsd)) {
-      return {
-        allowed: false,
-        code: 'monthly_spending_limit_exceeded',
-        reason: `Estimated cost ($${estimatedCostUsd.toFixed(4)}) would exceed monthly spending limit ($${this.limits.monthlySpendingLimitUsd.toFixed(2)}).`,
-        details: { limit: this.limits.monthlySpendingLimitUsd, currentSpend: this.monthlyCumulativeSpendUsd, estimatedCostUsd }
-      };
-    }
-
-    // Grant atomic reservation
-    const reservationId = `res_${randomUUID()}`;
-    wf.activeReservations.set(reservationId, {
-      taskId,
-      modelId: model.id,
-      amountUsd: estimatedCostUsd,
-      createdAt: Date.now()
+      const month=this.now().toISOString().slice(0,7);
+      if(state.month!==month){state.month=month;state.monthlyCumulativeSpendUsd=0;}
+      this.state=state;return fn(state);
     });
-
-    return {
-      allowed: true,
-      reservationId,
-      amountUsd: estimatedCostUsd,
-      estimatedTokens: estimatedInputTokens + maxOutputTokens
-    };
   }
-
-  reconcile({
-    workflowId = 'default-workflow',
-    taskId = 'default-task',
-    reservationId,
-    model,
-    usage = {}
-  }) {
-    const wf = this._getWorkflowRecord(workflowId);
-    const reservation = wf.activeReservations.get(reservationId);
-    wf.activeReservations.delete(reservationId);
-
-    const actualCostUsd = calculateCost(model, usage);
-
-    // Commit actual cost to spend counters
-    wf.cumulativeSpendUsd = Math.round((wf.cumulativeSpendUsd + actualCostUsd) * 1e6) / 1e6;
-    this.tasks.set(taskId, Math.round((this._getTaskSpend(taskId) + actualCostUsd) * 1e6) / 1e6);
-    this.monthlyCumulativeSpendUsd = Math.round((this.monthlyCumulativeSpendUsd + actualCostUsd) * 1e6) / 1e6;
-
-    this.save();
-
-    return {
-      actualCostUsd,
-      reservationReleasedUsd: reservation ? reservation.amountUsd : 0.0,
-      deltaUsd: Math.round(((reservation ? reservation.amountUsd : 0.0) - actualCostUsd) * 1e6) / 1e6
-    };
+  workflow(state,id){
+    if(!Object.hasOwn(state.workflows,id))Object.defineProperty(state.workflows,id,{value:{spend:0,tokens:0,calls:0,limit:this.limits.perWorkflowBudgetUsd,paused:false},enumerable:true,writable:true,configurable:true});
+    return state.workflows[id];
   }
-
-  release({ workflowId = 'default-workflow', reservationId }) {
-    const wf = this._getWorkflowRecord(workflowId);
-    const reservation = wf.activeReservations.get(reservationId);
-    wf.activeReservations.delete(reservationId);
-    return { released: !!reservation, amountUsd: reservation ? reservation.amountUsd : 0.0 };
+  configureWorkflow(workflowId,{maxRequests=60,maxTokens=24000,maxSpendUsd=0}={}){
+    if(!Number.isSafeInteger(maxRequests)||maxRequests<1||maxRequests>1000||!Number.isSafeInteger(maxTokens)||maxTokens<1||maxTokens>1000000||!amount(maxSpendUsd))throw Error('invalid_budget_limit');
+    if(maxSpendUsd!==0&&!this.paidAuthorized)throw Error('paid_authorization_required');
+    return this.transaction(s=>{const w=this.workflow(s,workflowId);
+      // An attempt cannot silently widen an existing workflow's approval.
+      if(w.requestLimit!==undefined&&(w.requestLimit!==maxRequests||w.tokenLimit!==maxTokens||w.limit!==maxSpendUsd))throw Error('workflow_budget_change_requires_approval');
+      Object.assign(w,{requestLimit:maxRequests,tokenLimit:maxTokens,limit:maxSpendUsd});return true;});
   }
-
-  approveBudgetIncrease(workflowId, additionalAmountUsd) {
-    const wf = this._getWorkflowRecord(workflowId);
-    const increase = Math.max(0, Number(additionalAmountUsd) || 0);
-    wf.budgetLimitUsd = Math.round((wf.budgetLimitUsd + increase) * 1e6) / 1e6;
-    wf.isPaused = false;
-    this.pendingApprovals.delete(workflowId);
-    return {
-      approved: true,
-      newWorkflowLimitUsd: wf.budgetLimitUsd,
-      isPaused: false
-    };
+  reserve({workflowId='default-workflow',taskId='default-task',model,estimatedInputTokens=2048,maxOutputTokens=1800}={}){
+    return this.transaction(s=>{
+      const deny=code=>({allowed:false,code,reason:code});
+      if(!model||!amount(estimatedInputTokens)||!amount(maxOutputTokens)||!['prompt','completion','request'].every(k=>amount(model.pricing?.[k]??(k==='request'?0:undefined))))return deny('unknown_model_price');
+      const zero=['prompt','completion','request'].every(k=>(model.pricing[k]||0)===0);
+      if((this.policy===POLICIES.FREE_ONLY||!this.paidAuthorized)&&(model.tier!=='free'||!zero))return deny('free_only_policy_violation');
+      if(model.tier==='free'&&!zero)return deny('inconsistent_free_price');
+      const w=this.workflow(s,workflowId),taskKey=JSON.stringify([workflowId,taskId]);
+      const t=s.tasks[taskKey]||{spend:0,tokens:0};
+      const all=Object.values(s.reservations),own=all.filter(r=>r.workflowId===workflowId),task=own.filter(r=>r.taskId===taskId);
+      const sum=(rs,k)=>rs.reduce((n,r)=>n+r[k],0),cost=estimateCost(model,estimatedInputTokens,maxOutputTokens),tokens=estimatedInputTokens+maxOutputTokens;
+      if(w.paused)return deny('workflow_paused_budget');
+      if(w.requestLimit!==undefined&&w.calls>=w.requestLimit)return deny('workflow_request_budget_exceeded');
+      if(w.tokenLimit!==undefined&&w.tokens+sum(own,'tokens')+tokens>w.tokenLimit)return deny('workflow_token_budget_exceeded');
+      if(t.spend+sum(task,'amountUsd')+cost>this.limits.perTaskBudgetUsd)return deny('task_budget_exceeded');
+      if(w.spend+sum(own,'amountUsd')+cost>w.limit){w.paused=true;w.pendingApproval={workflowId,taskId,estimatedCostUsd:cost};return deny('workflow_budget_exceeded');}
+      if(s.monthlyCumulativeSpendUsd+sum(all,'amountUsd')+cost>this.limits.monthlySpendingLimitUsd)return deny('monthly_spending_limit_exceeded');
+      const reservationId='res_'+randomUUID();
+      s.reservations[reservationId]={workflowId,taskId,taskKey,modelId:model.id,amountUsd:cost,tokens,month:s.month,createdAt:this.now().toISOString()};
+      w.calls++;return {allowed:true,reservationId,amountUsd:cost,estimatedTokens:tokens};
+    });
   }
-
-  getStatus(workflowId = 'default-workflow') {
-    const wf = this._getWorkflowRecord(workflowId);
-    let wfReservations = 0.0;
-    for (const r of wf.activeReservations.values()) wfReservations += r.amountUsd;
-
-    const globalActiveReservations = this._getActiveReservationsTotal();
-    const effectiveWfLimit = wf.budgetLimitUsd || this.limits.perWorkflowBudgetUsd;
-
-    return {
-      policy: this.policy,
-      limits: { ...this.limits },
-      monthlyCumulativeSpendUsd: this.monthlyCumulativeSpendUsd,
-      globalActiveReservationsUsd: Math.round(globalActiveReservations * 1e6) / 1e6,
-      remainingMonthlyBudgetUsd: this.limits.monthlySpendingLimitUsd > 0
-        ? Math.max(0, Math.round((this.limits.monthlySpendingLimitUsd - this.monthlyCumulativeSpendUsd - globalActiveReservations) * 1e6) / 1e6)
-        : null,
-      workflow: {
-        id: workflowId,
-        cumulativeSpendUsd: wf.cumulativeSpendUsd,
-        activeReservationsUsd: Math.round(wfReservations * 1e6) / 1e6,
-        budgetLimitUsd: effectiveWfLimit,
-        remainingBudgetUsd: effectiveWfLimit > 0
-          ? Math.max(0, Math.round((effectiveWfLimit - wf.cumulativeSpendUsd - wfReservations) * 1e6) / 1e6)
-          : null,
-        isPaused: wf.isPaused,
-        pendingApproval: this.pendingApprovals.get(workflowId) || null
+  reconcile({workflowId='default-workflow',taskId='default-task',reservationId,model,usage}={}){
+    return this.transaction(s=>{
+      if(s.settlements[reservationId]){
+        const settled=s.settlements[reservationId];
+        if(settled.workflowId!==workflowId||settled.taskId!==taskId||settled.modelId!==model?.id)throw Error('budget_reservation_scope_mismatch');
+        return {...settled,duplicate:true};
       }
-    };
+      const r=s.reservations[reservationId];
+      if(!r||r.workflowId!==workflowId||r.taskId!==taskId||r.modelId!==model?.id)throw Error('budget_reservation_scope_mismatch');
+      if(!amount(usage?.prompt_tokens)||!amount(usage?.completion_tokens))return {actualCostUsd:null,reservationRetained:true};
+      const cost=calculateCost(model,usage),tokens=usage.prompt_tokens+usage.completion_tokens,w=this.workflow(s,workflowId);
+      const t=s.tasks[r.taskKey]||{spend:0,tokens:0};
+      w.spend=money(w.spend+cost);w.tokens+=tokens;t.spend=money(t.spend+cost);t.tokens+=tokens;s.tasks[r.taskKey]=t;
+      s.monthlyCumulativeSpendUsd=money(s.monthlyCumulativeSpendUsd+cost);
+      if(cost>r.amountUsd||tokens>r.tokens)w.paused=true;
+      delete s.reservations[reservationId];
+      const settled={workflowId,taskId,modelId:model.id,actualCostUsd:cost,reservationReleasedUsd:r.amountUsd,deltaUsd:money(r.amountUsd-cost),actualTokens:tokens};
+      s.settlements[reservationId]=settled;
+      const ids=Object.keys(s.settlements);for(const id of ids.slice(0,Math.max(0,ids.length-10000)))delete s.settlements[id];
+      return settled;
+    });
+  }
+  release({workflowId='default-workflow',reservationId}={}){
+    return this.transaction(s=>{const r=s.reservations[reservationId];if(!r)return {released:false,amountUsd:0};if(r.workflowId!==workflowId)throw Error('budget_reservation_scope_mismatch');delete s.reservations[reservationId];return {released:true,amountUsd:r.amountUsd};});
+  }
+  approveBudgetIncrease(workflowId,value){
+    if(!amount(value))throw Error('invalid_budget_limit');
+    return this.transaction(s=>{const w=this.workflow(s,workflowId);w.limit=money(w.limit+value);w.paused=false;delete w.pendingApproval;return {approved:true,newWorkflowLimitUsd:w.limit,isPaused:false};});
+  }
+  setPolicy(policy,limits={}){if(!Object.values(POLICIES).includes(policy))throw Error('invalid_budget_policy');if(policy!==POLICIES.FREE_ONLY&&!this.paidAuthorized)throw Error('paid_authorization_required');this.policy=policy;Object.assign(this.limits,limits);if(Object.values(this.limits).some(v=>!amount(v)))throw Error('invalid_budget_limit');}
+  getStatus(workflowId='default-workflow'){
+    return this.transaction(s=>{const w=this.workflow(s,workflowId),all=Object.values(s.reservations),own=all.filter(r=>r.workflowId===workflowId),global=money(all.reduce((n,r)=>n+r.amountUsd,0)),reserved=money(own.reduce((n,r)=>n+r.amountUsd,0));return {policy:this.policy,limits:{...this.limits},monthlyCumulativeSpendUsd:s.monthlyCumulativeSpendUsd,globalActiveReservationsUsd:global,remainingMonthlyBudgetUsd:money(Math.max(0,this.limits.monthlySpendingLimitUsd-s.monthlyCumulativeSpendUsd-global)),workflow:{id:workflowId,cumulativeSpendUsd:w.spend,activeReservationsUsd:reserved,budgetLimitUsd:w.limit,remainingBudgetUsd:money(Math.max(0,w.limit-w.spend-reserved)),isPaused:w.paused,pendingApproval:w.pendingApproval,requestCount:w.calls,observedTokens:w.tokens,reservedTokens:own.reduce((n,r)=>n+r.tokens,0)}};});
   }
 }
-
-// Global default ledger instance
-let defaultLedger = null;
-export function getBudgetLedger() {
-  if (!defaultLedger) {
-    defaultLedger = new BudgetLedger();
-  }
-  return defaultLedger;
-}
+let defaultLedger;
+export const getBudgetLedger=()=>defaultLedger??=new BudgetLedger();

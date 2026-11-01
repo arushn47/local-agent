@@ -328,7 +328,7 @@ test('audit 4b: repeat loop exhausts after maxIterations and halts workflow with
 });
 
 test('audit 5: budget ledger strictly blocks paid model reservations under Free Only policy', () => {
-  const ledger = new BudgetLedger({ policy: POLICIES.FREE_ONLY });
+  const ledger = new BudgetLedger({ storageFile: null, policy: POLICIES.FREE_ONLY });
 
   // 1. Free model is admitted with $0.00 spend
   const freeRes = ledger.reserve({

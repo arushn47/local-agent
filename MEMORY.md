@@ -1,12 +1,12 @@
 # Development memory
 
-Latest recovery checkpoint: 171/171 regressions, UI build and all three browser checks pass. File-backed project ownership coordinates runners/processes and single-agent dispatch; only read-only roles share parallel batches. Crashed leases require session abort/reconciliation; ambiguous retries and interrupted loops require review/replanning, never replay. Production remains gated. Attributed durable guard accounting is next.
+Latest recovery checkpoint: 175/175 regressions, production build and all three browser checks pass. Supervised sessions, exact model aliases, native roles, conservative cross-process recovery and durable attributed guard accounting are connected at source/fixture level. Actual pinned-engine registry and actual OmniRoute routing probes pass without live inference. Production remains gated pending bounded live tool-path acceptance; see docs/phase8/RECOVERY.md.
 
 ## Authoritative recovery status — 2026-11-01
 
 Local baseline `21eacb4` preserves source/docs; credential scan passed, no push, private data/installers/raw evidence remain ignored locally. False-success checkpoint `d78ab90` passed 150/150 regressions and UI build. Security checkpoint now has 156/156 regressions, production UI build and a browser check using the actual authenticated restore API: dismiss preserves files, post-preview edits reject the entire preflight, explicit fresh approval restores and leaves a paused workflow requiring replanning.
 
-Production workflow activation/resume/retry is deliberately gated pending supervised OpenCode lifecycle, exact-model registration, durable concurrency/recovery, workflow budget attribution and enforced role tools. Plan saving and existing single-agent tasks remain available. Paid workflow activation is rejected. No live inference, packaging, publishing or remote push. Next is recovery checkpoint 4, with acceptance gates in [recovery evidence](docs/phase8/RECOVERY.md).
+Production workflow activation/resume/retry remains gated pending bounded live acceptance of the connected path. The adapters and local contracts are verified, with conservative recovery limits documented. Plan saving and existing single-agent tasks remain available. Paid workflow activation is rejected. No live inference, packaging, publishing or remote push. Next is approval of the bounded live acceptance proposal, with acceptance gates in [recovery evidence](docs/phase8/RECOVERY.md).
 
 Updated 2026-10-30. Phases 1-4, 0.5.0/0.5.1, Phase 6.5 (110/110 tests), and Phase 7 (111/111 tests) are accepted development milestones. **0.5.2 is a Phase 5.2 development candidate; public release is blocked.** Phase 7 Dark IDE Workspace and light mode polish are complete and verified (111/111 tests); Phase 8 is partially implemented and under integration recovery.
 

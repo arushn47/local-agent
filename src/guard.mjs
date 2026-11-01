@@ -9,6 +9,7 @@ import { requestBudget } from './context.mjs';
 import { GeminiSignatures } from './gemini-signatures.mjs';
 import { ContinuationLedger } from './routing.mjs';
 import { getBudgetLedger } from './workspace/budget-ledger.mjs';
+import { WorkflowScopes } from './workspace/workflow-scopes.mjs';
 
 export function tokenMatches(received, expected) {
   const a = Buffer.from(received || ''); const b = Buffer.from(expected || '');
@@ -21,11 +22,25 @@ async function readBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString());
 }
 
-export function createGuard({ config, env = loadEnvironment, secret, catalog = loadCatalog, budgetLedger = getBudgetLedger(), fetcher = fetch, auditPath = join(stateDir, 'routing.jsonl'), runtimeState = () => ({ apiVersion:1, stage:'guard_only', ready:false }) }) {
+export function createGuard({ config, env = loadEnvironment, secret, catalog = loadCatalog, budgetLedger = getBudgetLedger(), scopeStore = new WorkflowScopes(join(stateDir,'workflow-scopes.json')), fetcher = fetch, auditPath = join(stateDir, 'routing.jsonl'), runtimeState = () => ({ apiVersion:1, stage:'guard_only', ready:false }) }) {
   const signatures = new GeminiSignatures();
   const ledger = new ContinuationLedger();
   return createServer(async (req, res) => {
+    try {
     const path = req.url;
+    if(path==='/api/v1/workflow-scopes'&&req.method==='POST'){
+      if(!tokenMatches(req.headers.authorization,`Bearer ${guardToken(secret,'admin')}`))return send(res,401,{error:'unauthorized'});
+      const input=await readBody(req),entry=catalog().providers?.[input.provider];
+      if(!entry?.allowed||!entry.enabled||!entry.models?.includes(input.model))return send(res,403,{error:'workflow_model_unavailable'});
+      if(input.policy!=='free_only'||input.maxSpendUsd!==0)return send(res,403,{error:'workflow_paid_authorization_unavailable'});
+      budgetLedger.configureWorkflow(input.workflowId,{maxRequests:input.maxRequests,maxTokens:input.maxTokens,maxSpendUsd:0});
+      const scope=scopeStore.create(input);return send(res,201,{id:scope.id,expiresAt:scope.expiresAt});
+    }
+    const scopeClose=path?.match(/^\/api\/v1\/workflow-scopes\/([a-f0-9]{64})\/close$/);
+    if(scopeClose&&req.method==='POST'){
+      if(!tokenMatches(req.headers.authorization,`Bearer ${guardToken(secret,'admin')}`))return send(res,401,{error:'unauthorized'});
+      scopeStore.close(scopeClose[1]);return send(res,200,{closed:true});
+    }
     if (path === '/api/v1/runtime' && req.method === 'GET') {
       if (!tokenMatches(req.headers.authorization, `Bearer ${guardToken(secret, 'admin')}`)) return send(res, 401, { error:'unauthorized' });
       return send(res, 200, runtimeState());
@@ -45,16 +60,17 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       const b = await readBody(req);
       return send(res, 200, budgetLedger?.approveBudgetIncrease(b?.workflowId, b?.additionalAmountUsd));
     }
-    const match = path?.match(/^\/(egress|workflow-egress)\/(gemini|groq|openrouter|ollama)\/v1\/(models|chat\/completions)$/);
+    const match = path?.match(/^\/(egress|workflow-egress)\/(gemini|groq|openrouter|ollama)(?:\/([a-f0-9]{64}))?\/v1\/(models|chat\/completions)$/);
     if (!match) return send(res, 404, { error: 'unknown_endpoint' });
-    const [, route, provider, endpoint] = match;
+    const [, route, provider, scopeId, endpoint] = match;
     if (!tokenMatches(req.headers.authorization, `Bearer ${guardToken(secret, route==='workflow-egress'?`workflow:${provider}`:provider)}`)) return send(res, 401, { error: 'unauthorized' });
     const discovered = catalog(); const credentials = env(); const entry = discovered.providers[provider];
     if (!entry?.enabled || !entry.allowed || !providerEligibility(provider, credentials).allowed) return send(res, 503, { error: { message: 'Provider is not admitted by LocalAgent policy', type: 'policy_blocked' } });
     if (provider !== 'ollama' && (!Number.isFinite(Date.parse(discovered.expiresAt)) || Date.parse(discovered.expiresAt) <= Date.now())) return send(res, 503, { error: { message: 'Refresh the expired cloud model catalog', type: 'policy_blocked' } });
     if (endpoint === 'models' && req.method === 'GET') return send(res, 200, { object: 'list', data: entry.models.map(id => ({ id, object: 'model', owned_by: provider, context_length: entry.capabilities?.[id]?.contextWindow || null, supported_parameters: ['tools'] })) });
     if (endpoint !== 'chat/completions' || req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
-    if(route==='workflow-egress')return send(res,403,{error:{code:'workflow_attribution_unavailable'}});
+    const scope=route==='workflow-egress'&&scopeId?scopeStore.get(scopeId):null;
+    if(route==='workflow-egress'&&(!scope||scope.provider!==provider))return send(res,403,{error:{code:'workflow_attribution_unavailable'}});
     
     const requestId = randomUUID(); let body;
     const policy = budgetLedger?.policy || 'free_only';
@@ -62,6 +78,8 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
     try { body = guardBody(provider, await readBody(req), admittedModels, config, credentials, { policy }); }
     catch (error) { const reason = /^[a-z_]{1,80}$/.test(error.message) ? error.message : 'invalid_json'; record(auditPath, { event: 'policy_blocked', provider, requestId, reason }); return send(res, error.message === 'body_too_large' ? 422 : 403, { error: { type: 'policy_blocked', code: reason, message: 'LocalAgent rejected this request before inference: ' + reason } }); }
     
+    if(scope&&body.model!==scope.model)return send(res,403,{error:{code:'workflow_exact_model_mismatch'}});
+    const attribution=scope?{workflowId:scope.workflowId,taskId:scope.taskId,attemptId:scope.attemptId}:{};
     const continuationScope = ledger.scopeFor(provider, body.model, providerKey(provider, credentials));
     try { ledger.assertHistory(continuationScope, body.messages); }
     catch { return send(res, 422, { error: { type: 'continuation_unavailable', code: 'unverified_continuation', message: 'No verified continuation route for this tool history. Start a new session; do not retry unchanged.' } }); }
@@ -81,8 +99,9 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
     // Atomic Budget Reservation check before dispatch
     const modelDetails = entry.modelsDetailed?.[body.model] || (entry.models?.includes(body.model) ? { id: body.model, name: body.model, tier: 'free', pricing: { prompt: 0, completion: 0, request: 0 } } : undefined);
     const reservation = budgetLedger?.reserve({
+      ...attribution,
       model: modelDetails,
-      estimatedInputTokens: budget.input,
+      estimatedInputTokens: budget.estimatedInputTokens,
       maxOutputTokens: body.max_tokens
     });
     if (reservation && !reservation.allowed) {
@@ -91,7 +110,7 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
     }
 
     const start = Date.now();
-    record(auditPath, { event: 'request', provider, model: body.model, requestId, budget, ...contextMetadata(body.messages) });
+    record(auditPath, { event: 'request', provider, model: body.model, requestId, ...attribution, budget, ...contextMetadata(body.messages) });
     const abort = new AbortController();
     res.once('close', () => { if (!res.writableEnded) abort.abort(); });
     try {
@@ -116,27 +135,28 @@ export function createGuard({ config, env = loadEnvironment, secret, catalog = l
       }
       signatureCollector?.finish();
       continuationCollector?.finish();
+      try{const frame=JSON.parse(tail.replace(/^data:\s*/,''));if(frame.usage)usage=frame.usage;}catch{}
       if (!res.destroyed) res.end();
       // Reconcile budget spend
       const tokens = usage ? Object.fromEntries(['prompt_tokens', 'completion_tokens', 'total_tokens'].filter(k => Number.isFinite(usage[k])).map(k => [k, usage[k]])) : undefined;
-      let costUsd = 0;
+      let costUsd = null;
       if (reservation?.reservationId) {
         if (tokens) {
-          const rec = budgetLedger.reconcile({ reservationId: reservation.reservationId, model: modelDetails, usage: tokens });
+          const rec = budgetLedger.reconcile({ ...attribution, reservationId: reservation.reservationId, model: modelDetails, usage: tokens });
           costUsd = rec.actualCostUsd;
         } else {
-          budgetLedger.release({ reservationId: reservation.reservationId });
+          // Dispatch happened. Unknown/partial usage retains the conservative
+          // reservation across restart, rather than inventing zero usage.
         }
       }
-      record(auditPath, { event: res.destroyed && !res.writableEnded ? 'interrupted' : 'completed', provider, model: body.model, requestId, status: upstream.status, durationMs: Date.now() - start, tokens, costUsd });
+      record(auditPath, { event: res.destroyed && !res.writableEnded ? 'interrupted' : 'completed', provider, model: body.model, requestId, ...attribution, status: upstream.status, durationMs: Date.now() - start, tokens, costUsd });
     } catch {
-      if (reservation?.reservationId) {
-        budgetLedger?.release({ reservationId: reservation.reservationId });
-      }
+      // A network failure may have reached the provider. Retain its reservation.
       record(auditPath, { event: 'network_error', provider, model: body.model, requestId, durationMs: Date.now() - start });
       if (!res.headersSent) send(res, 502, { error: { type: 'upstream_error', message: 'Provider connection failed' } });
       else res.destroy();
     }
+    }catch(error){if(!res.headersSent)send(res,503,{error:{code:'accounting_or_scope_unavailable'}});else res.destroy();}
   });
 }
 
