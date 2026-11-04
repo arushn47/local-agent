@@ -21,7 +21,10 @@ export function workflowAgents(privateDirectory) {
   const privateReads={'**/.env*':'deny','**/*credential*':'deny','**/*secret*':'deny','**/.localagent/**':'deny','**/.ssh/**':'deny','**/.aws/**':'deny','**/.npmrc':'deny',[privateDirectory.replaceAll('\\','/')+'/**']:'deny'};
   return Object.fromEntries(Object.values(ROLE_DEFINITIONS).map(role=>{
     const mask=workflowToolMask(role.id);
-    return [`localagent-${role.id}`,{mode:'all',hidden:true,prompt:role.systemInstruction,steps:8,tools:mask,
+    // In 1.18.31 legacy tools booleans are normalized into permission entries
+    // before this object. Mixing both moves '*' after specific tool rules and
+    // denies every tool. Use the supported permission API as the sole authority.
+    return [`localagent-${role.id}`,{mode:'all',hidden:true,prompt:role.systemInstruction,steps:8,
       permission:{'*':'deny',read:{'*':'allow',...privateReads},glob:'allow',grep:'allow',edit:mask.edit?'ask':'deny',write:mask.write?'ask':'deny',bash:mask.bash?'ask':'deny',external_directory:'deny',task:'deny',skill:'deny',webfetch:'deny',websearch:'deny',question:'deny'}}];
   }));
 }

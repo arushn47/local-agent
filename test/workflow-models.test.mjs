@@ -9,10 +9,10 @@ test('exact workflow IDs cannot fall back to another model, provider or stale ca
   assert.throws(()=>exactWorkflowModel(model.qualified,registry,{...c,expiresAt:'2000-01-01'}),/expired/);
   c.providers.gemini.allowed=false;assert.throws(()=>exactWorkflowModel(model.qualified,registry,c),/unavailable/);
 });
-test('specialized roles install deny-first native permissions plus a deny tool mask',()=>{
+test('specialized roles use permission rules alone so legacy tool normalization cannot reorder wildcard denies',()=>{
   const agents=workflowAgents('C:/private-profile');
   for(const role of ['planner','researcher','reviewer']){
-    const a=agents[`localagent-${role}`];assert.equal(a.permission.bash,'deny');assert.equal(a.permission.edit,'deny');assert.equal(a.tools.write,false);assert.equal(a.permission['*'],'deny');assert.equal(a.permission.read['**/.env*'],'deny');
+    const a=agents[`localagent-${role}`];assert.equal(a.permission.bash,'deny');assert.equal(a.permission.edit,'deny');assert.equal(a.tools,undefined);assert.equal(Object.keys(a.permission)[0],'*');assert.equal(a.permission['*'],'deny');assert.equal(a.permission.read['**/.env*'],'deny');
   }
   assert.equal(agents['localagent-tester'].permission.bash,'ask');assert.equal(agents['localagent-implementer'].permission.edit,'ask');
   for(const a of Object.values(agents))assert.equal(a.permission.task,'deny');

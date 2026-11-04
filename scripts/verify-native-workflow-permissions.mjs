@@ -16,17 +16,16 @@ const {WorkflowScopes}=await import('../src/workspace/workflow-scopes.mjs');
 setCredentialOverlay({GEMINI_API_KEY:null,GROQ_API_KEY:null,OPENROUTER_API_KEY:null});
 const port=async()=>{const s=createServer();s.listen(0,'127.0.0.1');await once(s,'listening');const p=s.address().port;await new Promise(r=>s.close(r));return p;};
 const config=loadConfig();config.gatewayPort=await port();config.guardPort=await port();for(const p of Object.values(config.providers))p.enabled=false;
-// Diagnostic probe only: explicit bypass below is restricted to this no-key,
-// deterministic loopback runtime to reproduce the upstream blocker.
+// Real supported permission-only adapter, with no execution bypass.
 const {startEngine}=await import('../src/workspace/engine.mjs');
 const {createTasks}=await import('../src/workspace/tasks.mjs');
 const {workflowAlias}=await import('../src/workspace/workflow-models.mjs');
 const {createWorkflowInstance,runWorkflow,loadWorkflow,cancelWorkflow}=await import('../src/workspace/workflow-engine.mjs');
 let platform,guard,transport,engine,tasks,calls=0;const cases=[];
 try{
- platform=await startPlatform(config);
+ platform=await startPlatform(config,{onChild:child=>child.on('exit',(code,signal)=>console.log(JSON.stringify({gatewayExit:{code,signal}})))});
  const model='example/coder:free',detail={id:model,tier:'free',freeTierVerified:true,pricing:{prompt:0,completion:0,request:0}};
- const catalog={expiresAt:new Date(Date.now()+60000).toISOString(),providers:{openrouter:{enabled:true,allowed:true,models:[model],modelsDetailed:{[model]:detail},capabilities:{[model]:{contextWindow:32768,tools:true,codingApproved:true}}}}};
+ const catalog={expiresAt:new Date(Date.now()+600000).toISOString(),providers:{openrouter:{enabled:true,allowed:true,models:[model],modelsDetailed:{[model]:detail},capabilities:{[model]:{contextWindow:32768,tools:true,codingApproved:true}}}}};
  guard=createGuard({config:{outputTokens:100},secret:secrets(),env:()=>({OPENROUTER_API_KEY:'fixture-only'}),catalog:()=>catalog,budgetLedger:new BudgetLedger({storageFile:null}),scopeStore:new WorkflowScopes(null),auditPath:join(process.env.LOCALAGENT_STATE_DIR,'fixture-audit.jsonl'),fetcher:async(url,options)=>{
   calls++;const body=JSON.parse(options.body),messages=body.messages;console.log(JSON.stringify({providerTools:body.tools?.map(t=>t.function?.name),calls}));
   const text=JSON.stringify(messages),name=text.match(/CASE_([a-z_]+)/)?.[1];assert.ok(name,'scenario identity');
@@ -47,9 +46,7 @@ try{
  writeFileSync(join(profile,'workflow-models.json'),JSON.stringify({[qualified]:{qualified,alias,provider:'openrouter',model}}));
  const generated=JSON.parse(readFileSync(join(profile,'opencode.json'),'utf8'));generated.provider.omniroute.models[alias]={tool_call:true,limit:{context:32768,output:100}};writeFileSync(join(profile,'opencode.json'),JSON.stringify(generated));
  engine=await startEngine({port:await port(),workflowTransport:transport});
- await assert.rejects(engine.verifyWorkflowPermissionEnforcement(),/bridge_unverified/);
- engine.verifyWorkflowPermissionEnforcement=async()=>{};
- for(const name of ['edit_allow','bash_allow','edit_deny','bash_deny','bash_interrupt']){
+ for(const name of ['edit_allow','bash_allow','edit_deny','bash_deny','edit_interrupt','bash_interrupt']){
   const directory=join(profile,name);mkdirSync(directory);writeFileSync(join(directory,'target.mjs'),'export function double(n){ return n + 1; }\n');
   writeFileSync(join(directory,'check.test.mjs'),"import fs from 'node:fs';fs.writeFileSync('command-ran','yes');\n");
   const project={id:name,path:directory};tasks=createTasks(engine,{get:()=>project},{sessionFile:join(directory,'sessions.json'),pollMs:50,deadlineMs:20000});
@@ -59,25 +56,27 @@ try{
   console.log(JSON.stringify({scenario:name,roleRules:agent.permissions.filter(r=>r.action==='edit'||r.action==='bash')}));
   const wf=createWorkflowInstance({workspaceDir:directory,plan:{id:'wf-'+name,title:name,policy:'free_only',budget:{maxSpendUsd:0,maxRequests:20,maxTokens:300000},stages:[{id:'work',agent:role,prompt:'CASE_'+name,assignedModel:qualified,...(role==='tester'?{testCommand:'node --test check.test.mjs'}:{targetFiles:['target.mjs']})}]}});
   let ended=false,error,result;const pending=runWorkflow({workflowId:wf.id,workspaceDir:directory,projectId:name,engine,tasks}).then(r=>{result=r;ended=true;},e=>{error=e;ended=true;});
-  let permissions=0;const start=Date.now();
+  let permissions=0;const approvals=[],answered=new Set();const start=Date.now();
   while(!ended&&Date.now()-start<22000){
    const step=loadWorkflow(wf.id,directory).stepStates.work;
-   if(step.sessionID&&name.endsWith('interrupt')){cancelWorkflow(wf.id,directory);await tasks.cancel(step.sessionID);}
    if(step.sessionID){const snap=await tasks.snapshot(step.sessionID);
     for(const p of snap.permissions){
+     if(answered.has(p.id))continue;answered.add(p.id);
      permissions++;assert.equal(readFileSync(join(directory,'target.mjs'),'utf8'),'export function double(n){ return n + 1; }\n');assert.equal(existsSync(join(directory,'command-ran')),false);
-     if(name.endsWith('interrupt'))cancelWorkflow(wf.id,directory);
-     else await tasks.permission(step.sessionID,p.id,name.endsWith('deny')?'reject':'once');
+     const reply=name.endsWith('interrupt')?'cancel':name.endsWith('deny')?'reject':'once';
+     approvals.push({id:p.id,permission:p.permission,reply});
+     if(reply==='cancel'){cancelWorkflow(wf.id,directory);await tasks.cancel(step.sessionID);}
+     else await tasks.permission(step.sessionID,p.id,reply);
     }
    }
    await new Promise(r=>setTimeout(r,50));
   }
   if(!ended)cancelWorkflow(wf.id,directory);await pending;if(error)throw error;
   const edited=readFileSync(join(directory,'target.mjs'),'utf8').includes('n * 2'),commandRan=existsSync(join(directory,'command-ran'));
-  const passed=name.endsWith('interrupt')?result.status==='cancelled'&&!edited&&!commandRan:permissions>0&&(name.endsWith('allow')?result.status==='completed':result.status!=='completed'&&!edited&&!commandRan);
-  cases.push({name,permissions,status:result.status,edited,commandRan,passed});tasks.stop();tasks=null;
+  const passed=name.endsWith('interrupt')?permissions>0&&result.status==='cancelled'&&!edited&&!commandRan:permissions>0&&(name.endsWith('allow')?result.status==='completed':result.status!=='completed'&&!edited&&!commandRan);
+  cases.push({name,permissions,approvals,status:result.status,error:loadWorkflow(wf.id,directory).stepStates.work.error,edited,commandRan,passed});console.log(JSON.stringify(cases.at(-1)));tasks.stop();tasks=null;
  }
- const passed=cases.every(c=>c.passed);mkdirSync('validation/phase8-permission-blocker',{recursive:true});writeFileSync('validation/phase8-permission-blocker/native-result.json',JSON.stringify({passed,cases,calls},null,2));if(!passed)process.exitCode=1;
+ const passed=cases.every(c=>c.passed);mkdirSync('validation/mvp',{recursive:true});writeFileSync('validation/mvp/native-result.json',JSON.stringify({passed,cases,calls},null,2));if(!passed)process.exitCode=1;
  console.log(JSON.stringify({passed,nativeEngine:'1.18.31',actualGateway:'3.8.52',liveInferenceRequests:0,cases,calls}));
 }finally{
  tasks?.stop();if(engine){const ended=once(engine.child,'exit');engine.stop();await ended;}await transport?.close();if(guard){guard.closeAllConnections();await new Promise(r=>guard.close(r));}

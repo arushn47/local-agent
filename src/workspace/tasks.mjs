@@ -38,8 +38,12 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
     const pending=(async()=>{
       const release=run?.release;if(run){run.release=null;run.state=code;releaseRun(run);}
       try{
-        await client(s).session.abort({sessionID:id});
-        if(s.workflow){const states=(await client(s).session.status()).data;if(!states||['busy','retry'].includes(states[id]?.type))throw Error('not_quiescent');}
+        const c=client(s);await c.session.abort({sessionID:id});
+        // The pinned engine can retain a pending approval after abort. Revoke
+        // those requests explicitly; cancellation never leaves an Allow card
+        // capable of reviving a stopped operation.
+        if(c.permission){for(const request of (await c.permission.list()).data||[]){if(request.sessionID===id)await c.permission.reply({requestID:request.id,reply:'reject'});}}
+        if(s.workflow){const states=(await c.session.status()).data;if(!states||['busy','retry'].includes(states[id]?.type))throw Error('not_quiescent');}
         if(run)run.uncertain=false;
         release?.();
       }catch{if(run&&s.workflow)run.uncertain=true;}
@@ -65,6 +69,12 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       const statusResponse=await c.session.status();
       if(s.workflow&&(!statusResponse.data||typeof statusResponse.data!=='object'))throw Error('workflow_observation_failed');
       const statuses=statusResponse.data||{};
+      // A rejected native tool can leave an idle session with no final prose.
+      // Treat the observed tool failure as failure instead of waiting for the
+      // deadline or allowing a later summary to establish success.
+      if(s.workflow && !['busy','retry'].includes(statuses[s.id]?.type) && messages.some(m=>m.info?.role==='assistant'&&m.info.time?.created>=run.startedAt&&(m.parts||[]).some(p=>p.type==='tool'&&p.state?.status==='error'))){
+        run.state='tool_error';releaseRun(run);
+      }
       const terminal=messages.filter(m=>m.info?.role==='assistant'&&m.info.time?.created>=run.startedAt).at(-1);
       const finished=s.workflow ? terminal?.info?.time?.completed>=run.startedAt&&terminal.info.finish==='stop'&&!terminal.info.error : messages.some(m=>m.info?.role==='assistant'&&m.info.time?.completed>=run.startedAt&&m.info.finish&&m.info.finish!=='tool-calls');
       if(run.state==='running'&&statuses[s.id]?.type!=='busy'&&statuses[s.id]?.type!=='retry'&&finished){run.state='completed';releaseRun(run);}
@@ -83,7 +93,7 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       const c=engine.forProject(projects.get(projectId).path);
       if(c.v2){
         if(!engine.verifyWorkflowPermissionEnforcement)throw Error('workflow_native_permission_bridge_unverified');
-        await engine.verifyWorkflowPermissionEnforcement({projectId,agent});
+        await engine.verifyWorkflowPermissionEnforcement({directory:projects.get(projectId).path,agent});
       }
       const data=(await c.session.create({title:`[${agent}] ${stepId}`,agent,model:{providerID:model.providerID,id:model.modelID},permission:[{permission:'edit',pattern:'*',action:tools.edit?'ask':'deny'},{permission:'bash',pattern:'*',action:tools.bash?'ask':'deny'}]})).data;
       if(!data?.id)throw Error('workflow_session_creation_failed');
@@ -97,9 +107,9 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       run.timer=setTimeout(()=>void abort(s.id,'task_deadline_exceeded'),Math.min(deadlineMs,120000));
       const onAbort=()=>void abort(s.id,'cancelled');signal?.addEventListener('abort',onAbort,{once:true});
       run.detach=()=>signal?.removeEventListener('abort',onAbort);
-      // Native engines are rejected above until the legacy tool bridge has
-      // verified authorization enforcement. Fake-engine fixtures are not proof.
-      try { await c.session.promptAsync({sessionID:s.id,agent,model,tools,parts:[{type:'text',text}]}); }
+      // Legacy per-prompt tools:true replaces session permissions with allow.
+      // Installed role rules and session permissions must remain authoritative.
+      try { await c.session.promptAsync({sessionID:s.id,agent,model,parts:[{type:'text',text}]}); }
       catch { await abort(s.id,'provider_error'); throw Error('workflow_dispatch_ambiguous'); }
       return s.id;
     },

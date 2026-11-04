@@ -8,6 +8,7 @@ import { prepareGuidance } from './guidance.mjs';
 import {withoutWorkspaceAuthentication} from '../runtime-environment.mjs';
 import { workflowAgents, exactWorkflowModel } from './workflow-models.mjs';
 import { loadCatalog } from '../catalog.mjs';
+import { verifyNativeRole } from './native-permissions.mjs';
 export async function startEngine({port=20144,profileName='opencode-profile',onChild=()=>{},signal,workflowTransport} = {}) {
   const profile=join(stateDir,profileName);for(const p of ['config','data','cache'])mkdirSync(join(profile,p),{recursive:true});
   const config=JSON.parse(readFileSync(join(stateDir,'opencode.json')));
@@ -37,7 +38,8 @@ export async function startEngine({port=20144,profileName='opencode-profile',onC
     let ready=false;for(let i=0;i<80;i++){signal?.throwIfAborted();if(child.exitCode!==null)throw Error('engine_exited');try{const r=await fetch(baseUrl+'/global/health',{headers,signal:AbortSignal.timeout(1000)});if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
     if(!ready)throw Error('engine_startup_timeout');
     return {forProject:directory=>createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),
-      verifyWorkflowPermissionEnforcement:async()=>{throw Error('workflow_native_permission_bridge_unverified');},
+      permissionEnforcementVerified:true,
+      verifyWorkflowPermissionEnforcement:({directory,agent})=>verifyNativeRole(createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),agent,stateDir),
       resolveWorkflowModel:qualified=>exactWorkflowModel(qualified,workflowModels,loadCatalog()),bindWorkflowSession:options=>{if(!workflowTransport)throw Error('workflow_transport_unavailable');return workflowTransport.bind(options);},releaseWorkflowSession:id=>workflowTransport?.release(id),stop:()=>child.kill(),child};
   }catch(e){child.kill();throw e;}
 }
