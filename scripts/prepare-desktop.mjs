@@ -10,7 +10,7 @@ const root=resolve('.'),stage=join(root,'.localagent/desktop-stage'),runtime=joi
 mkdirSync(runtime,{recursive:true});
 const backendIndex=process.argv.indexOf('--backend-runtime'),backendRoot=backendIndex>=0?resolve(process.argv[backendIndex+1]||''):null;
 let backendProfile;
-if(backendRoot){const closureBytes=readFileSync('validation/phase52/backend-closure.json');backendProfile=checkBackendProof({closure:JSON.parse(closureBytes),proof:JSON.parse(readFileSync('validation/phase52/backend-proof.json')),closureBytes,lock:JSON.parse(readFileSync('package-lock.json')),candidate:backendRoot,workspace:root});}
+if(backendRoot){const evidence=resolve(process.env.LOCALAGENT_BUILD_EVIDENCE||'validation/phase52'),closureBytes=readFileSync(join(evidence,'backend-closure.json'));backendProfile=checkBackendProof({closure:JSON.parse(closureBytes),proof:JSON.parse(readFileSync(join(evidence,'backend-proof.json'))),closureBytes,lock:JSON.parse(readFileSync('package-lock.json')),candidate:backendRoot,workspace:root});}
 const pin=JSON.parse(readFileSync('integrations/runtime-versions.json'));
 const lockSha256=createHash('sha256').update(readFileSync('package-lock.json')).digest('hex');
 if(process.argv.includes('--reuse-dependencies')){

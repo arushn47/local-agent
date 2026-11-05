@@ -45,7 +45,8 @@ function scan(directory) {
 }
 scan(join(root, '.build/next'));
 if (!traces) throw Error('Build traces missing; run gateway:build and gateway:adopt first');
-mkdirSync('validation/phase52', {recursive: true});
-writeFileSync('validation/phase52/gateway-seeds.json', JSON.stringify([...seeds].sort(), null, 2));
-writeFileSync('validation/phase52/trace-inventory.json', JSON.stringify({commit: pin.commit, traces, files: [...files].sort(), packages: [...seeds].sort()}, null, 2));
+const evidence=resolve(process.env.LOCALAGENT_BUILD_EVIDENCE||'validation/phase52');
+mkdirSync(evidence, {recursive: true});
+writeFileSync(join(evidence,'gateway-seeds.json'), JSON.stringify([...seeds].sort(), null, 2));
+writeFileSync(join(evidence,'trace-inventory.json'), JSON.stringify({commit: pin.commit, traces, files: [...files].sort(), packages: [...seeds].sort()}, null, 2));
 console.log(JSON.stringify({commit: pin.commit, traces, tracedPaths: files.size, seeds: seeds.size}));

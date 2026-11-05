@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {backendTreeHash} from './backend-contract.mjs';
 
-const evidence = resolve('validation/phase52'), closureBytes = readFileSync(join(evidence, 'backend-closure.json'));
+const evidence = resolve(process.env.LOCALAGENT_BUILD_EVIDENCE||'validation/phase52'), closureBytes = readFileSync(join(evidence, 'backend-closure.json'));
 const closure = JSON.parse(closureBytes), candidate = resolve(process.argv[2] || closure.output);
 if (candidate !== resolve(closure.output)) throw Error('Candidate does not match closure');
 const scripts = join(candidate, 'scripts');

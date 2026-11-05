@@ -1,9 +1,9 @@
 import './inspect-backend-closure.mjs';
 import{readFileSync,writeFileSync,existsSync,readdirSync,statSync,realpathSync,mkdirSync,cpSync}from'node:fs';import{join,resolve,relative,dirname,sep}from'node:path';import{createRequire,builtinModules}from'node:module';import{createHash}from'node:crypto';import{omitDesktopFile}from'./desktop-payload.mjs';
-const root=resolve('.'),modules=resolve(process.env.LOCALAGENT_BACKEND_SOURCE_MODULES||'node_modules'),out=resolve(process.argv[2]||'.localagent/phase52-backend/runtime'),reportDir=resolve('validation/phase52');mkdirSync(reportDir,{recursive:true});
+const root=resolve('.'),modules=resolve(process.env.LOCALAGENT_BACKEND_SOURCE_MODULES||'node_modules'),out=resolve(process.argv[2]||'.localagent/phase52-backend/runtime'),reportDir=resolve(process.env.LOCALAGENT_BUILD_EVIDENCE||'validation/phase52');mkdirSync(reportDir,{recursive:true});
 for(const [name,version]of Object.entries({omniroute:'3.8.52',next:'16.4.3'}))if(JSON.parse(readFileSync(join(modules,name,'package.json'))).version!==version)throw Error('Review backend closure for upstream version change: '+name);
 if(!out.startsWith(join(root,'.localagent')+sep)||existsSync(out))throw Error('Choose a new isolated candidate directory');mkdirSync(out,{recursive:true});
-const seeds=new Set([...JSON.parse(readFileSync('validation/phase52/gateway-seeds.json')), ...JSON.parse(readFileSync('validation/phase52/trace-inventory.json')).packages,'react','react-dom','@opencode-ai/sdk','opencode-ai','solid-js','yazl','playwright-core','@atjsh/llmlingua-2','js-tiktoken']);
+const seeds=new Set([...JSON.parse(readFileSync(join(reportDir,'gateway-seeds.json'))), ...JSON.parse(readFileSync(join(reportDir,'trace-inventory.json'))).packages,'react','react-dom','@opencode-ai/sdk','opencode-ai','solid-js','yazl','playwright-core','@atjsh/llmlingua-2','js-tiktoken']);
 const lock=JSON.parse(readFileSync('package-lock.json'));
 const builtins=new Set([...builtinModules,...builtinModules.map(n=>'node:'+n)]),missing=[],packages=new Map();
 const packageName=s=>s.startsWith('@')?s.split('/').slice(0,2).join('/'):s.split('/')[0];
