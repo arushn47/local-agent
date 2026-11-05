@@ -2,7 +2,7 @@
 
 ## Replacement proposal — conditional, NOT authorized to execute
 
-Do not run until the deterministic native edit/bash allow/deny/interruption contract passes. It currently fails, so another live attempt is premature.
+The deterministic native edit/bash allow/deny/interruption contract now passes (2026-11-05), as do credential-free browser single/multi-agent native tool workflows. See [candidate evidence](../MVP-CANDIDATE.md). This does **not** authorize another live attempt; the proposal below still requires explicit owner approval.
 
 Once that blocker is fixed, request approval for one disposable project/profile, one freshly verified free model, Free Only/$0, at most 8 upstream requests, **64,000 cumulative conservative reservation tokens without settlement replenishment**, and 120 seconds total. No retry, fallback, paid inference, package, publication or push.
 

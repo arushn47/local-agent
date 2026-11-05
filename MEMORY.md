@@ -1,8 +1,16 @@
 # Development memory
 
-Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
+## Current snapshot — 2026-11-05
 
-## Authoritative recovery status — 2026-11-01
+Native permission bypass resolved without rebuilding OpenCode: remove both deprecated agent tool masks and per-prompt tool flags; inspect effective legacy role permissions before session creation. Actual OpenCode/OmniRoute/guard edit/bash Allow, Reject and pending-approval cancellation all pass. Idle rejected tools fail promptly; cancellation revokes retained approvals. [Root cause](docs/phase8/PERMISSION-ADAPTER.md).
+
+183 regressions and production UI build pass. Actual browser single-agent coding passes with native edit/test tools, independent fixed tests and no replay. A native three-session bounded implement/test/review cycle passes with content-bound human approval and separate resume: 7 scripted local responses, 63,351 cumulative reserved tokens under 8/64,000/$0. **No live inference**; production workflow Start/Resume/Retry remains gated pending separately authorized live acceptance.
+
+File inspection now rejects private directories/aliases/junctions/hardlinks, preserves line numbers during highlighting, supports keyboard selection and isolates stale file/task reads. Command/test states and context usage are honest. A desktop-discovered draft initialization race is fixed and browser-tested. Pending plan model assignment and custom JSON planning work; human review approval rejects stale file bytes.
+
+Built and current-host validated a separate unsigned 0.5.3 internal candidate. Packaged startup, placeholder DPAPI onboarding/removal, native task/project navigation, isolated preview/embedded inspection/native ZIP export, file inspection, workflow gating, engine crash recovery, app restart/draft retention and shutdown all pass; zero renderer errors and zero guard inference requests. Frozen reduced dependency bytes match historical proof and current locked versions/integrities; fresh bundled-Node compatibility has zero escapes. Source/UI bytes match the candidate; payload scan passes. Use `release/desktop-0.5.3/Launch-Internal.cmd` for an isolated profile. No installed app, real credentials, previous installer, registry, remote repository or publication was changed. [Feature matrix/build/evidence/limitations](docs/MVP-CANDIDATE.md), [sanitized evidence](validation/mvp/README.md). Clean-VM, licensing, human accessibility, long-soak and live-provider gates remain open.
+
+## Historical recovery checkpoint — 2026-11-01
 
 Local baseline `21eacb4` preserves source/docs; credential scan passed, no push, private data/installers/raw evidence remain ignored locally. False-success checkpoint `d78ab90` passed 150/150 regressions and UI build. Security checkpoint now has 156/156 regressions, production UI build and a browser check using the actual authenticated restore API: dismiss preserves files, post-preview edits reject the entire preflight, explicit fresh approval restores and leaves a paused workflow requiring replanning.
 

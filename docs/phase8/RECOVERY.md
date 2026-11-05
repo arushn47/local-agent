@@ -1,6 +1,12 @@
 # Phase 8 Integration Recovery & Hardening
 
-## Follow-up blocker hardening — local tests only
+## Current recovery checkpoint — 2026-11-05
+
+The native permission bypass is resolved with a compatible permission-only adapter, not an upstream rebuild. Six real native edit/bash Allow/Reject/pending-approval-cancellation cases pass. A real browser single-agent coding task and a bounded native Implementer/Tester/Reviewer cycle pass against deterministic local responses, including independent fixed tests, content-bound human review, explicit resume and stable completed state. No live inference was run. Production workflows remain gated pending separately authorized live acceptance.
+
+Current source/build evidence and limits: [MVP candidate](../MVP-CANDIDATE.md), [sanitized results](../../validation/mvp/README.md), [root cause and adapter](PERMISSION-ADAPTER.md). The earlier failed live attempt and diagnostic findings below remain historical evidence; they are not current native-permission results.
+
+## Historical follow-up blocker hardening — 2026-11-01
 
 **Not all three blockers are fixed.** Production remains gated; no live inference was rerun.
 

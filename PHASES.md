@@ -1,8 +1,8 @@
 # Development phases
 
-Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
+Current checkpoint — 2026-11-05: native permission precedence is fixed; six actual edit/bash Allow/Reject/cancellation cases pass. Native single-agent coding and a bounded three-session implement/test/human-review browser cycle pass against scripted local responses. Exact preflight model assignment, content-bound human review, file/command/task UX and startup draft fixes are implemented. 183 regressions; production UI build and packaged 0.5.3 current-host desktop workflows/recovery pass. Production workflows and public release remain gated. [Completion matrix and limits](docs/MVP-CANDIDATE.md).
 
-## Phase 8 Integration Recovery & Hardening — 2026-11-01
+## Historical Phase 8 Integration Recovery & Hardening — 2026-11-01
 
 Phase 8 remains partial. Recovery checkpoints 1–3 have source/fixture evidence; checkpoints 4–9 remain open. Production workflow activation is blocked with `workflow_execution_not_ready` until the supervised execution and guard-attribution gates pass. Existing single-agent tasks remain available. No live inference, packaging, publishing or push.
 

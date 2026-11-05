@@ -1,6 +1,6 @@
 # LocalAgent architecture
 
-Blocker hardening: cumulative budget and terminal cleanup regressions pass; permission enforcement remains UNRESOLVED. Deterministic real OpenCode/OmniRoute edit/bash cases reproduce absent approvals and unprevented operations. Production now rejects native workflow dispatch before session creation, independently of the API gate. No live rerun. See docs/phase8/RECOVERY.md.
+Current implementation update — 2026-11-05: the native permission bypass is resolved with a permission-only adapter, without an upstream binary/source patch. Real deterministic native edit/bash Allow/Reject/cancellation and browser single/multi-agent coding paths pass. Production workflows remain gated pending live-provider acceptance. See [candidate matrix](docs/MVP-CANDIDATE.md) and [adapter rationale](docs/phase8/PERMISSION-ADAPTER.md).
 
 
 Status: architecture and implementation boundaries, 2026-10-24. Windows desktop host acceptance passed; clean-VM and public-release gates remain open.
@@ -94,11 +94,13 @@ Phase 6 starts with a read-only context projection from OpenCode session records
 Phase 6.2 keeps the guard bound unchanged and instead schedules upstream's supported `compaction.buffer`/`keep.tokens` from `inputCeiling`, the single definition of the guard's usable input budget, so automatic compaction runs before the guard rejects the same request. Manual compaction is deliberately not exposed: the pinned 1.18.31 engine answers 503 for `/api/session/:sessionID/compact` and the v1 summarize route is deprecated. LocalAgent still stores no history or summary; a compaction marker plus its auto flag are projected as metadata, and conversation context is read only through the pinned message/context APIs.
 
 
-## Phase 8 implementation boundary — 2026-11-01
+## Phase 8 implementation boundary — 2026-11-05
 
-Implemented: heuristic catalog recommendations, template/numbered-list plans, graph validation, role prompt definitions, file-lock/loop units and an inspector tree. The inspector polls; it does not stream workflow execution events. Specialized native roles, exact model aliases, shared session supervision, conservative non-replaying recovery and workflow-attributed guard budgets now have local-contract evidence. Live tool-path acceptance remains open. A custom runner is labelled as such and does not establish production verification.
+Implemented: heuristic catalog recommendations, template/numbered-list plans and editable custom JSON, graph validation, exact preflight model assignment, role definitions, ownership/loop units and an inspector tree. The inspector polls; it does not stream workflow execution events. Native roles, exact aliases, shared supervision, non-replaying recovery and attributed budgets have actual deterministic browser → API → OpenCode → OmniRoute → guard → native-tool evidence. Live-provider acceptance remains open. Custom runners never establish native execution proof.
 
 Recovery now rejects missing executors and observation/provider/timeout failures. Test/review text is not verification. Workflow completion checks all leaf outcomes; completed steps cannot be retried. Production API activation/resume/retry is blocked until an independently validated integration enables it. Free Only remains the default; paid workflow policies are rejected while paid authorization remains unavailable; boundary attribution has local-contract evidence.
+
+The pinned legacy prompt API converts tool booleans into unconditional session allows, and legacy agent normalization can reorder wildcard denies when tools and permission maps are mixed. LocalAgent emits permission rules alone and omits prompt tool flags. Effective legacy role rules are checked before workflow session creation; native permissions still own authorization. Human review uses an expiring-by-restart HMAC bound to workflow state and inspected file byte hashes, then a separate explicit Resume. A reviewed successful repeat iteration is marked complete so completed native sessions are not replayed.
 
 Workflow plans are untrusted: identifiers exclude traversal/prototype keys; node depth/count, arrays, text, roles, dependencies and file paths are bounded and validated again on persistence/load. Invalid or conflicting plans cannot be instantiated. State uses exclusive temporary files, fsync and atomic rename, with no-clobber creation. This does not yet establish crash-safe execution recovery.
 
@@ -106,4 +108,4 @@ Snapshot access rejects private paths, lexical escapes, Windows aliases/streams,
 
 This is not an OS sandbox or a multi-file restore transaction. A filesystem failure mid-restore may leave an approved partial restoration; snapshots remain and the workflow stays paused. Hostile same-user processes racing filesystem operations remain outside an OS isolation guarantee. Atomic file persistence must not be confused with durable agent execution recovery.
 
-Current: the task lifecycle, original session identity, scoped OmniRoute/guard attribution and native role configuration have source/local-contract coverage. Next: bounded live tool execution and human review; isolated parallel writers and automatic ambiguous replay remain unavailable. No bypass of the guard, paid inference or unapproved live tests.
+Current: task lifecycle, original session identity, scoped OmniRoute/guard attribution, native role enforcement and human review have deterministic native browser evidence. Next: separately authorized live-provider acceptance; isolated parallel writers and automatic ambiguous replay remain unavailable. No bypass of the guard, paid inference or unapproved live tests.

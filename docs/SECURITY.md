@@ -1,6 +1,6 @@
 # LocalAgent security and release scope
 
-Security review, 2026-10-24. This is a local Windows alpha, not an independently audited sandbox. [Release gates](RELEASE.md) remain open.
+Updated 2026-11-05. This is a local Windows internal candidate, not an independently audited sandbox. Native permission precedence was corrected and actual deterministic Allow/Reject/cancellation behavior is verified without an upstream patch. File inspection now uses shared lexical/link/private-path checks and bounded descriptor reads. Human review approvals are bound to workflow state and file byte hashes. [Candidate evidence and limits](MVP-CANDIDATE.md), [permission adapter](phase8/PERMISSION-ADAPTER.md). [Release gates](RELEASE.md) remain open.
 
 ## Boundaries
 

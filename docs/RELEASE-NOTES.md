@@ -1,3 +1,10 @@
+# 0.5.3 internal MVP candidate
+
+- Fix pinned OpenCode native permission precedence without changing its binary. Actual edit/bash Allow, Reject and cancellation contracts pass against deterministic local responses.
+- Add exact preflight model assignment, custom plan JSON and content-bound human review with separate resume. Production workflow execution stays gated pending authorized live-provider acceptance.
+- Harden file inspection; preserve line numbers/keyboard access, isolate stale project/task reads and restore drafts immediately. Commands/tests no longer invent outcomes or exit codes; context labels last completed usage.
+- Revalidate the frozen reduced dependency payload and run new isolated native/browser/desktop checks. Unsigned private candidate; previous installers/user data retained, no live inference or publication. [Scope/evidence/blockers](MVP-CANDIDATE.md).
+
 # 0.5.2 stabilization candidate
 
 - Backend-scoped dependency packaging follows pinned build traces, upstream externals/native extras and transitive closure. Excludes unused dashboard packages while retaining Next's framework peers and tested authentication/routing helpers.

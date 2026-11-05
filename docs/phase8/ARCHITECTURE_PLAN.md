@@ -2,6 +2,8 @@
 
 Updated 2026-10-30.
 
+Historical design proposal. Current implemented scope and verified limits are in [MVP-CANDIDATE.md](../MVP-CANDIDATE.md). In particular, deprecated agent/per-prompt tool booleans must not be used as a safe permission mask with this engine; use the [permission-only adapter](PERMISSION-ADAPTER.md). Paid authorization, automatic ambiguous retries and isolated parallel writers remain unavailable.
+
 ---
 
 ## 1. Executive Summary & Core Mission

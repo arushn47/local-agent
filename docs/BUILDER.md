@@ -6,7 +6,7 @@ Phase 4 adds an integrated **static HTML/CSS/JavaScript** workflow to the existi
 
 1. Open LocalAgent, connect a confirmed-free provider in **Connections**, and choose a project folder.
 2. Ask the agent for `index.html` with relative CSS/module-script URLs and tests. Approve only the intended file/command permissions. For an empty folder, **Preview → Add starter** is also available.
-3. Select **Preview → Start isolated preview**. File changes automatically reload it. Desktop, tablet and mobile buttons change the actual CSS viewport, scaled to fit the panel.
+3. Select **Browser → Start isolated preview**. File changes automatically reload it. Desktop, tablet and mobile buttons change the actual CSS viewport, scaled to fit the panel.
 4. **Validate static build** checks the entry point and JavaScript syntax. **Inspect with Playwright** captures the current viewport and reports console errors, failed resources and horizontal overflow. Changed revisions mark previous results stale.
 5. Review the console and screenshot. **Refine with these findings** fills a draft in the current conversation; review it and describe the intended change before starting the agent. **Changes** and **Tests** retain real engine diffs and command output.
 6. **Export source** downloads a filtered ZIP. **Stop preview** revokes its URL; app shutdown stops the listener and owned browser/validator processes.

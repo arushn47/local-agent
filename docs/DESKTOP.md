@@ -1,12 +1,12 @@
 # Windows desktop alpha
 
-LocalAgent 0.5.2 is a **development stabilization candidate, not a cleared public release**. It uses Electron 42.11.18, bundled Node 24.22.1, OpenCode 1.18.31 and security-rebuilt OmniRoute 3.8.52 / Next 16.4.3. No global Node, OpenCode, OmniRoute or separate browser installation is required to run it.
+LocalAgent 0.5.3 is an **unsigned internal candidate, not a cleared public release**. It uses Electron 42.11.18, bundled Node 24.22.1, OpenCode 1.18.31 and security-rebuilt OmniRoute 3.8.52 / Next 16.4.3. No global Node, OpenCode, OmniRoute or separate browser installation is required to run it. [Current feature matrix, actual validation and limits](MVP-CANDIDATE.md).
 
 ## Install and launch
 
-Run `release/desktop-0.5.2/LocalAgent-Setup-0.5.2-x64.exe`, then open **LocalAgent** from Start. The unsigned per-user installer needs Windows x64 with built-in tar.exe and Windows PowerShell; it does not require elevation. Or keep the entire `release/desktop-0.5.2/win-unpacked/` folder and launch its LocalAgent.exe. [Measured size, identity and verification limits](../validation/phase52/README.md).
+For the new internal build, keep the entire `release/desktop-0.5.3/` candidate folder and run `Launch-Internal.cmd`. It selects `%LOCALAPPDATA%/LocalAgent-Internal-0.5.3` instead of the installed app's profile. The underlying `win-unpacked/LocalAgent.exe` uses normal application data if launched directly. Do not copy individual files into the installed app. The earlier 0.5.2 installer remains preserved and no 0.5.3 installer/upgrade acceptance is claimed. [Historical installer evidence](../validation/phase52/README.md).
 
-Startup shows credential/gateway/engine progress. **Choose folder…** or **Ctrl+O** opens a native project picker. Configure free-tier keys in Connections, describe a task, approve individual edits/commands, then review Changes, Tests and Routing. Preview supports static relative HTML/CSS/JavaScript. [Builder workflow](BUILDER.md).
+Startup shows credential/gateway/engine progress. **Choose folder…** or **Ctrl+O** opens a native project picker. Configure free-tier keys in Connections, describe a task, approve individual edits/commands, then review Changes, Tests and Routing. The Browser inspector supports static relative HTML/CSS/JavaScript. Workflows can be saved/edited; production Start/Resume/Retry stays gated pending live acceptance. [Builder workflow](BUILDER.md).
 
 Closing the app stops owned services. A runtime crash exposes an explicit restart; drafts survive, and no prompt is automatically replayed. Old Gemini tool history can fail closed after signature expiry/restart. Agent command permissions are not OS sandboxing.
 
