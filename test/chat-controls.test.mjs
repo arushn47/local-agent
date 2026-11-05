@@ -112,3 +112,13 @@ test('queue limits are per chat and an interrupted delivery is held after restar
     }finally{recovered.stop();}
   }finally{f.close();}
 });
+
+test('Stop waits for in-flight admission before aborting so a late queued dispatch cannot revive the chat',async()=>{
+  const f=setup();try{
+    const s=await f.tasks.create('project'),c=f.engine.forProject();let admit,aborts=0;
+    c.session.promptAsync=()=>new Promise(resolve=>{admit=resolve;});c.session.abort=async()=>{aborts++;};
+    const sending=f.tasks.prompt(s.id,'pending admission');f.tasks.enqueue(s.id,'held');
+    const stopping=f.tasks.cancel(s.id);await new Promise(r=>setTimeout(r,20));assert.equal(aborts,0);
+    admit();await Promise.all([sending,stopping]);assert.equal(aborts,1);assert.equal((await f.tasks.snapshot(s.id)).state,'cancelled');assert.equal(f.tasks.list('project')[0].queuePaused,true);
+  }finally{f.close();}
+});

@@ -66,6 +66,7 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       const release=run?.release;if(run){run.release=null;run.state=code;releaseRun(run);}
       try{
         if(run?.steering)await run.steering.catch(()=>{});
+        if(run?.dispatch)await run.dispatch.catch(()=>{});
         const c=client(s);await c.session.abort({sessionID:id});
         // The pinned engine can retain a pending approval after abort. Revoke
         // those requests explicitly; cancellation never leaves an Allow card
@@ -152,7 +153,7 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       run.detach=()=>signal?.removeEventListener('abort',onAbort);
       // Legacy per-prompt tools:true replaces session permissions with allow.
       // Installed role rules and session permissions must remain authoritative.
-      try { await c.session.promptAsync({sessionID:s.id,agent,model,parts:[...(shared?[shared]:[]),{type:'text',text}]}); }
+      try { run.dispatch=c.session.promptAsync({sessionID:s.id,agent,model,parts:[...(shared?[shared]:[]),{type:'text',text}]});await run.dispatch;run.dispatch=null; }
       catch { await abort(s.id,'provider_error'); throw Error('workflow_dispatch_ambiguous'); }
       return s.id;
     },
@@ -186,7 +187,7 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       const run={state:'running',startedAt:Date.now(),seen:new Set(),budget:new ProgressBudget()};runs.set(id,run);
       if(coordinateProject){try{run.release=acquireExecution(projects.get(s.projectId).path,'single-agent');}catch(error){runs.delete(id);throw error;}}
       run.timer=setTimeout(()=>void abort(id,'task_deadline_exceeded'),120000);
-      try{await client(s).session.promptAsync({sessionID:id,model,parts});s.projectMemoryRevision=memory.revision;save();}catch{await abort(id,'provider_error');throw Error('prompt_failed');}
+      try{run.dispatch=client(s).session.promptAsync({sessionID:id,model,parts});await run.dispatch;run.dispatch=null;s.projectMemoryRevision=memory.revision;save();}catch{await abort(id,'provider_error');throw Error('prompt_failed');}
     },
     enqueue(id,text){
       validText(text);const s=get(id);if(s.workflow)throw Error('invalid_workflow_session');
