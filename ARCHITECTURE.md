@@ -1,5 +1,7 @@
 # LocalAgent architecture
 
+Chat-control update — 2026-11-06: idle model selection preserves the original OpenCode session/history. Exact single-target aliases use ordinary guarded egress; task-fit ranking is explicit metadata, not a benchmark. A bounded, revisioned user-maintained project brief is shared on the next message. Pending per-chat inputs are held locally until successful completion; steering appends through the pinned legacy prompt path and joins the existing loop. V2 inbox admission does not deliver into that legacy loop. Stop/errors/restart hold queues; ambiguous delivery never retries automatically. Follow agent projects confined file activity and refreshes the existing read-only inspector at tool boundaries. Selected model capacities translate against the shared compaction buffer so larger routes still compact before their own unchanged guard. [Behavior, evidence and limitations](docs/CHAT-CONTROLS.md).
+
 Current implementation update — 2026-11-05: the native permission bypass is resolved with a permission-only adapter, without an upstream binary/source patch. Real deterministic native edit/bash Allow/Reject/cancellation and browser single/multi-agent coding paths pass. Production workflows remain gated pending live-provider acceptance. See [candidate matrix](docs/MVP-CANDIDATE.md) and [adapter rationale](docs/phase8/PERMISSION-ADAPTER.md).
 
 

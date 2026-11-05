@@ -1,6 +1,6 @@
 # Development phases
 
-Current checkpoint — 2026-11-05: native permission precedence is fixed; six actual edit/bash Allow/Reject/cancellation cases pass. Native single-agent coding and a bounded three-session implement/test/human-review browser cycle pass against scripted local responses. Exact preflight model assignment, content-bound human review, file/command/task UX and startup draft fixes are implemented. 183 regressions; production UI build and packaged 0.5.3 current-host desktop workflows/recovery pass. Production workflows and public release remain gated. [Completion matrix and limits](docs/MVP-CANDIDATE.md).
+Current checkpoint — 2026-11-06: same-chat model switching, all-discovered free-model task-fit ranking, shared project briefs, Follow agent and bounded queue/steering are implemented. The actual native single-agent browser flow exercises these controls, approvals and independent tests without replay. Six actual edit/bash Allow/Reject/cancel cases and the three-session implement/test/human-review browser cycle pass again. 192 regressions, UI build and packaged 0.5.4 current-host desktop workflows/recovery pass. No live inference; production workflows and public release remain gated. [Behavior and gaps](docs/CHAT-CONTROLS.md), [completion matrix and limits](docs/MVP-CANDIDATE.md).
 
 ## Historical Phase 8 Integration Recovery & Hardening — 2026-11-01
 

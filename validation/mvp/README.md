@@ -1,23 +1,26 @@
-# Internal candidate validation — 2026-11-05
+# Internal candidate validation — 2026-11-06
 
 This report distinguishes deterministic native execution, seeded display fixtures, desktop behavior and live inference. **No live inference was performed.** The product's workflow execution gate remains closed.
 
 | Check | Observed result |
 |---|---|
-| Regression suite | 183/183 pass; includes role admission, private file/link rejection, exact preflight assignment, stale review approval, budget ceilings and terminal-state preservation |
+| Regression suite | 192/192 pass; includes role admission, private file/link rejection, exact preflight assignment, stale review approval, budget ceilings and terminal-state preservation |
 | Production UI | Builds successfully; existing optional ~770 KB highlighting chunk warning |
+| Queue/cancel recovery | Pending text is bounded and held after Stop/errors/restart; interrupted/ambiguous admission never auto-replays. Stop waits for in-flight native prompt admission before aborting, closing the late-arrival race |
 | Native permission contract | Six passing cases: edit/bash Allow once, Reject and cancellation while approval is pending; one unique request per case; no forbidden side effects |
-| Single-agent browser path | Actual normal route, native read/edit/bash, two UI approvals, independent passing tests, diff/test views and reload without replay; four scripted provider responses |
+| Single-agent browser path | Actual normal route, native read/edit/bash, two UI approvals, independent passing tests, diff/test views and reload without replay; six scripted provider responses; exact selection, same-chat switch, shared brief, followed file contents, queued follow-up and steering all pass |
 | Multi-agent browser path | Actual bounded implement/test/review cycle; three distinct native sessions; two tool approvals plus content-bound human review and separate resume; independent fixed tests; completed state retained on reload |
-| Workflow budget boundary | Seven scripted requests; 63,351 lifetime conservative reserved tokens; limits 8 / 64,000 / $0; no settlement replenishment. Reported usage is synthetic fixture usage |
+| Workflow budget boundary | Seven scripted requests; 63,354 lifetime conservative reserved tokens; limits 8 / 64,000 / $0; no settlement replenishment. Reported usage is synthetic fixture usage |
 | Existing browser suites | IDE, preflight exact-model assignment and authenticated checkpoint restore pass; automated accessibility incomplete findings remain |
 | Inspector/races | Keyboard Enter/Space, correct text after delayed responses/project changes, preserved highlighting line numbers, changed absolute paths, honest command/test states, startup draft/typing and 390px reflow pass |
 | Dependency payload | Frozen reduced tree `ce7ab567427f8b750f511d31d3e6013c630b9a7a31ab2d8d76ad0dae17da186d` retained; current lock versions/integrities checked; new isolated bundled-Node compatibility passes with 1,039 observed module files and zero escapes |
-| Payload scan | 19,244 files / 1,504,981,229 bytes at the validated scan, before final documentation refresh; zero exact known-secret matches, active env/npmrc files or links. `payload-security.json` records the final scan. This is not a complete secret/security audit |
+| Payload scan | Exact retained dependency bytes plus current source/UI/docs; zero exact known-secret matches, active env/npmrc files or links. `payload-security.json` records the final scan. This is not a complete secret/security audit |
 | Packaged desktop | **Passed**: fresh profile, sandboxed renderer, native-picker adapter, two real native task tabs, missing-model gating, placeholder DPAPI save/removal, preview isolation/interaction, syntax check, embedded mobile inspection, native ZIP download, file inspection, saved-plan execution gate, engine crash recovery, app restart/draft/removal retention and owned-process shutdown. Zero renderer errors and guard inference requests |
-| Desktop launch observations | 10,154 ms and 6,892 ms; uncontrolled cache state, not clean-machine/cold-start benchmarks |
+| Desktop launch observations | 35,591 ms and 8,023 ms; uncontrolled cache state, not clean-machine/cold-start benchmarks |
 
 Raw local reports: `native-result.json`, `native-single-result.json`, `native-ui-result.json`, `inspection.json`, `backend-closure.json`, `backend-proof.json`, `payload-security.json`, `package-binaries.json`, `desktop.json`; adjacent logs are `validation/mvp-*.log`. Raw profiles, source exports and screenshots remain ignored, and are not approved for publication.
+
+Current follow-up logs use `validation/feedback-*.log`. The new native keyboard check exposed queued-editor focus loss on snapshot replacement; reconciling native IDs preserves the editor and continued typing across polling. Task-type intent also survives refresh. Both behaviors pass in the native single-agent fixture. The first packaging attempt could not locate npm; the build-only integrity-pinned tool fixed that without changing application dependencies. A lock-version edit initially touched a transitive version; graph validation rejected it and the transitive entry was restored before staging.
 
 Retained failures informed fixes: sandbox loopback EACCES was rerun with authorized local network access; the old mixed tools/permission configuration reproduced bypasses; a 60-second fixture catalog expired during a longer diagnostic; stale UI permission cards needed request-ID deduplication; idle rejected native tools needed explicit failure handling; custom model listbox semantics were replaced by native selects/disclosures; a real desktop restart exposed late draft initialization. An initial Electron export test used the wrong browser download event; the replacement observes native DownloadItem completion. Failed logs are not model success evidence.
 

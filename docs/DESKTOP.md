@@ -1,10 +1,10 @@
 # Windows desktop alpha
 
-LocalAgent 0.5.3 is an **unsigned internal candidate, not a cleared public release**. It uses Electron 42.11.18, bundled Node 24.22.1, OpenCode 1.18.31 and security-rebuilt OmniRoute 3.8.52 / Next 16.4.3. No global Node, OpenCode, OmniRoute or separate browser installation is required to run it. [Current feature matrix, actual validation and limits](MVP-CANDIDATE.md).
+LocalAgent 0.5.4 is an **unsigned internal candidate, not a cleared public release**. It uses Electron 42.11.18, bundled Node 24.22.1, OpenCode 1.18.31 and security-rebuilt OmniRoute 3.8.52 / Next 16.4.3. No global Node, OpenCode, OmniRoute or separate browser installation is required to run it. [Current feature matrix, actual validation and limits](MVP-CANDIDATE.md).
 
 ## Install and launch
 
-For the new internal build, keep the entire `release/desktop-0.5.3/` candidate folder and run `Launch-Internal.cmd`. It selects `%LOCALAPPDATA%/LocalAgent-Internal-0.5.3` instead of the installed app's profile. The underlying `win-unpacked/LocalAgent.exe` uses normal application data if launched directly. Do not copy individual files into the installed app. The earlier 0.5.2 installer remains preserved and no 0.5.3 installer/upgrade acceptance is claimed. [Historical installer evidence](../validation/phase52/README.md).
+For the new internal build, keep the entire `release/desktop-0.5.4/` candidate folder and run `Launch-Internal.cmd`. It selects `%LOCALAPPDATA%/LocalAgent-Internal-0.5.4` instead of the installed app's profile. The underlying `win-unpacked/LocalAgent.exe` uses normal application data if launched directly. Do not copy individual files into the installed app. The earlier 0.5.2 installer remains preserved and no 0.5.4 installer/upgrade acceptance is claimed. [Historical installer evidence](../validation/phase52/README.md).
 
 Startup shows credential/gateway/engine progress. **Choose folder…** or **Ctrl+O** opens a native project picker. Configure free-tier keys in Connections, describe a task, approve individual edits/commands, then review Changes, Tests and Routing. The Browser inspector supports static relative HTML/CSS/JavaScript. Workflows can be saved/edited; production Start/Resume/Retry stays gated pending live acceptance. [Builder workflow](BUILDER.md).
 

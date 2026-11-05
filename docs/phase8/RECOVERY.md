@@ -1,5 +1,9 @@
 # Phase 8 Integration Recovery & Hardening
 
+## Chat-control follow-up — 2026-11-06
+
+192 regressions and the expanded six-response native single-agent browser flow pass: exact model selection, same-session switch/next message, explicit project brief, file following, queue/edit/steer during approval, FIFO follow-up and reload without replay. Steering uses the pinned legacy prompt path; the newer V2 inbox admitted but did not deliver into that legacy loop. Stop now waits for in-flight admission before aborting; ambiguous dispatch remains held, never replayed automatically. All six native permission cases and the three-session human-review workflow passed again. Packaged 0.5.4 desktop controls, persistent project memory, onboarding/preview/export/recovery pass. No live inference or production multi-agent activation. [Behavior and limits](../CHAT-CONTROLS.md), [candidate matrix](../MVP-CANDIDATE.md).
+
 ## Current recovery checkpoint — 2026-11-05
 
 The native permission bypass is resolved with a compatible permission-only adapter, not an upstream rebuild. Six real native edit/bash Allow/Reject/pending-approval-cancellation cases pass. A real browser single-agent coding task and a bounded native Implementer/Tester/Reviewer cycle pass against deterministic local responses, including independent fixed tests, content-bound human review, explicit resume and stable completed state. No live inference was run. Production workflows remain gated pending separately authorized live acceptance.

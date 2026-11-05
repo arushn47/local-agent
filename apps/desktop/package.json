@@ -1,7 +1,7 @@
 {
   "name": "localagent-desktop",
   "productName": "LocalAgent",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "description": "Local-first AI coding with guarded free and BYOK routing",
   "author": "LocalAgent",

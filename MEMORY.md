@@ -1,6 +1,14 @@
 # Development memory
 
-## Current snapshot — 2026-11-05
+## Current snapshot — 2026-11-06
+
+Implemented same-chat idle model switching with guarded exact free-model aliases, explicit task-fit recommendations and ranking of all discovered connected-provider free candidates (no nine-model cap). Shared user-maintained 4 KB project briefs use revision checks and confined atomic storage; updated revisions enter the next normal prompt. Follow agent opens/refreshes actual public project files at native tool boundaries. Chat queues support edit/remove/hold/resume and real steering into the pinned legacy loop. V2 inbox admission did not promote into that loop; it is not used. Stop/errors/restart hold queues, and uncertain delivery never auto-retries. Per-route logical engine context limits reconcile different model capacities with the shared compaction buffer; guard/provider limits remain unchanged. [Behavior, metadata research and limits](docs/CHAT-CONTROLS.md).
+
+192 regressions and UI build pass. Expanded actual browser → OpenCode/OmniRoute/guard single-agent check selects an exact model, injects saved project memory, follows real read/edit contents, queues/edits/steers while edit approval is pending, drains a follow-up, switches to Automatic in the same native session, sends again and reloads without replay. Six scripted local responses, two required tool approvals, independent fixed tests and zero renderer errors. All six native edit/bash Allow/Reject/cancel cases and the three-session human-review workflow pass again. Existing isolated browser suites and 390px inspector/race checks pass. No live inference; production multi-agent activation remains gated. Automatic live summary fidelity, interactive terminal/PTY UI, external service connectors, automatic learned memory and OS sandboxing remain unimplemented/unaccepted.
+
+Prepared separate unsigned 0.5.4 internal candidate using the unchanged frozen dependency graph; packaged desktop onboarding/navigation/static preview/export/gating/crash recovery/restart passes with a disposable profile. Installed app, previous artifacts and actual user credentials/data are preserved. Build-only npm 12.2.2 is integrity-pinned and isolated because this host lost npm from PATH; it adds no application dependency or global installation. [Current matrix/build and blockers](docs/MVP-CANDIDATE.md), [sanitized evidence](validation/mvp/README.md).
+
+## Previous checkpoint — 2026-11-05
 
 Native permission bypass resolved without rebuilding OpenCode: remove both deprecated agent tool masks and per-prompt tool flags; inspect effective legacy role permissions before session creation. Actual OpenCode/OmniRoute/guard edit/bash Allow, Reject and pending-approval cancellation all pass. Idle rejected tools fail promptly; cancellation revokes retained approvals. [Root cause](docs/phase8/PERMISSION-ADAPTER.md).
 

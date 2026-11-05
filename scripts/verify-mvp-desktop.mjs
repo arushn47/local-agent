@@ -68,6 +68,10 @@ try{
   await page.getByRole('link',{name:/Export source/}).click();await wait(async()=>await app.evaluate(()=>globalThis.mvpDownload==='completed'));
   assert.equal(readFileSync(exportFile).subarray(0,2).toString(),'PK');report.checks.sourceExport=true;
   await page.getByRole('tab',{name:'Files',exact:true}).click();await page.getByRole('button',{name:'index.html file',exact:true}).click();await page.locator('.viewer .line-num').first().waitFor();report.checks.packagedFileInspection=true;
+  await page.getByRole('button',{name:'Follow agent',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Follow agent',exact:true}).getAttribute('aria-pressed'),'true');report.checks.followControl=true;
+  const taskCount=await tabs.count();await page.getByLabel('Coding model',{exact:true}).selectOption('auto');assert.equal(await tabs.count(),taskCount);report.checks.modelSelectionKeepsChat=true;
+  await page.getByRole('button',{name:/Compare free models/}).click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});report.checks.modelComparisonKeyboard=true;
+  await page.getByRole('button',{name:/^Project memory/}).click();await page.getByLabel('Project brief',{exact:true}).fill('Packaged acceptance: preserve fixed tests.');await page.getByRole('button',{name:'Save shared brief',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});report.checks.projectMemorySaved=true;
   await page.getByRole('tab',{name:'Workflows',exact:true}).click();await page.getByRole('button',{name:'+ New Workflow',exact:true}).click();
   await page.getByLabel('Task or Feature Objective').fill('Internal desktop gated plan');await page.getByRole('button',{name:'Create & Plan',exact:true}).click();
   await page.getByRole('button',{name:'Start workflow',exact:true}).waitFor();assert.ok(await page.getByRole('button',{name:'Start workflow',exact:true}).isDisabled());report.checks.packagedWorkflowGate=true;
@@ -79,6 +83,7 @@ try{
   assert.equal(await page.getByLabel('Describe your coding task').inputValue(),draft);report.checks.runtimeCrashRecoveryDraft=true;
   await close();report.checks.normalShutdown=true;await launch();
   assert.equal(await page.getByLabel('Describe your coding task').inputValue(),draft);
+  await page.getByRole('button',{name:/^Project memory/}).click();await wait(async()=>await page.getByLabel('Project brief',{exact:true}).inputValue()==='Packaged acceptance: preserve fixed tests.');await page.keyboard.press('Escape');report.checks.projectMemorySurvivesRestart=true;
   assert.ok(!(await api('status')).providers.find(p=>p.id==='gemini').configured);report.checks.restartRetainsDraftAndRemoval=true;
   assert.deepEqual(report.errors,[]);await close();
   const audit=join(profile,'runtime/routing.jsonl');

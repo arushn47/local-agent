@@ -1,3 +1,11 @@
+# 0.5.4 internal chat-controls candidate
+
+- Change free models in the same chat at an idle boundary; preserve history. Compare all discovered free candidates with explicit task-fit metadata and unavailable reasons; no nine-model cap or quality claims.
+- Add a bounded shared project brief with version/conflict checks, and Follow agent in the read-only file inspector.
+- Add per-chat message queues with edit/remove/hold/resume and real steering through the pinned runner; Stop/errors/restart hold pending work, and uncertain dispatch never automatically replays.
+- Reconcile selected model capacities with the shared automatic compaction buffer. Live summary fidelity and manual compaction remain unaccepted/unavailable respectively.
+- Native single-agent, permissions and human-review workflow fixtures and 192 regressions pass without live inference. Production workflows remain gated. [Behavior and limits](CHAT-CONTROLS.md).
+
 # 0.5.3 internal MVP candidate
 
 - Fix pinned OpenCode native permission precedence without changing its binary. Actual edit/bash Allow, Reject and cancellation contracts pass against deterministic local responses.
