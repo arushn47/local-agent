@@ -575,15 +575,12 @@ function App() {
 
         <div class="side-foot">
           <div class="quota">
-            <span>Context · {s.snapshot?.context?.inputTokens ? Math.round(s.snapshot.context.inputTokens / 1024) + 'K' : 'honest count'}</span>
-            <span>{s.status?.plan?.targets?.[0]?.model ? s.status.plan.targets[0].model.split('/').pop() : 'free route'}</span>
-          </div>
-          <div class="bar">
-            <i style={{ width: s.snapshot?.context?.inputTokens ? Math.min(100, Math.round((s.snapshot.context.inputTokens / (s.status?.plan?.targets?.[0]?.contextWindow || 32768)) * 100)) + '%' : '15%' }} />
+            <span>Last input · {s.snapshot?.context?.inputTokens != null ? (s.snapshot.context.inputIncludingCache ?? s.snapshot.context.inputTokens).toLocaleString() + ' tokens' : 'unknown'}</span>
+            <span>{s.status?.plan?.targets?.[0]?.model ? s.status.plan.targets[0].model.split('/').pop() : 'no coding model'}</span>
           </div>
           <div class="quota">
-            <span class="ok">● Free-only route</span>
-            <span>{s.connected ? 'connected' : 'offline'}</span>
+            <span>Free-only policy</span>
+            <span>{!s.connected ? 'runtime offline' : s.status?.plan?.targets?.length ? 'route configured' : 'no coding route'}</span>
           </div>
         </div>
       </aside>
@@ -882,7 +879,7 @@ function App() {
               </form>
               <div class="hint-row">
                 <span>Enter to send · Shift+Enter for new line · Ctrl+Alt+P panels</span>
-                <span>Draft saved · free route verified</span>
+                <span>Local draft · {s.status?.plan?.targets?.length ? 'eligible free route' : 'no coding model available'}</span>
               </div>
             </div>
 
