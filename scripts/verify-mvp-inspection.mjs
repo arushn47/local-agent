@@ -51,9 +51,14 @@ try{
   await page.locator('.project-switch').click();await page.getByRole('dialog').getByRole('button',{name:/Inspection B/}).click();await page.waitForTimeout(700);
   assert.ok((await page.getByRole('tablist',{name:'Open tasks'}).innerText()).includes('project-B'));
   assert.ok(!(await page.getByRole('tablist',{name:'Open tasks'}).innerText()).includes('project-A'));
+  await page.addInitScript(()=>localStorage.setItem('localagent.workspace',JSON.stringify({project:'project-A',draft:'Saved startup draft',theme:'dark',inspectorTab:'files'})));
+  await page.reload();await page.getByLabel('Describe your coding task').waitFor();
+  assert.equal(await page.getByLabel('Describe your coding task').inputValue(),'Saved startup draft');
+  await page.getByLabel('Describe your coding task').fill('Typed while history restores');await page.waitForTimeout(700);
+  assert.equal(await page.getByLabel('Describe your coding task').inputValue(),'Typed while history restores');
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   assert.deepEqual(errors,[]);mkdirSync('validation/mvp',{recursive:true});await page.screenshot({path:'validation/mvp/inspector-mobile.png',fullPage:true});
-  writeFileSync('validation/mvp/inspection.json',JSON.stringify({passed:true,liveInferenceRequests:0,keyboardFileSelection:true,lateResponsesIsolated:true,lineNumbersAfterHighlightAndTheme:true,changedAbsolutePathNormalized:true,projectSwitchIsolation:true,commandStates:true,testStates:true,mobileReflow:true,errors},null,2));
+  writeFileSync('validation/mvp/inspection.json',JSON.stringify({passed:true,liveInferenceRequests:0,keyboardFileSelection:true,lateResponsesIsolated:true,lineNumbersAfterHighlightAndTheme:true,changedAbsolutePathNormalized:true,projectSwitchIsolation:true,startupDraftPreserved:true,commandStates:true,testStates:true,mobileReflow:true,errors},null,2));
   console.log('File inspection and command/test state browser checks passed.');
 }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

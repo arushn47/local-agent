@@ -116,7 +116,7 @@ function App() {
     older: [],
     historyMore: true,
     historyBusy: false,
-    draft: '',
+    draft: saved.draft || '',
     path: '',
     error: '',
     notice: '',
@@ -375,7 +375,6 @@ function App() {
             set('session', saved.session);
           }
         }
-        set('draft', saved.draft || '');
         hydrated = true;
         await refresh({ includeSession: true });
       } catch {
