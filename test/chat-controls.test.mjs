@@ -69,6 +69,8 @@ test('queue waits for completion, edits in order and native steering never repla
   const f=setup();try{
     const s=await f.tasks.create('project');await f.tasks.prompt(s.id,'first');
     const one=f.tasks.enqueue(s.id,'later'),two=f.tasks.enqueue(s.id,'guidance');
+    await f.tasks.queueAction(s.id,{action:'pause'});assert.equal(f.tasks.list('project')[0].queuePaused,true);
+    await f.tasks.queueAction(s.id,{action:'resume'});assert.equal(f.tasks.list('project')[0].queuePaused,false);
     await f.tasks.queueAction(s.id,{action:'edit',messageId:one.id,text:'edited later'});
     await new Promise(r=>setTimeout(r,40));assert.equal(f.calls.length,1);
     await f.tasks.queueAction(s.id,{action:'steer',messageId:two.id});assert.equal(f.calls.length,2);assert.equal(f.calls[1].sessionID,s.id);assert.equal(f.calls[1].parts[0].text,'guidance');assert.equal(f.calls[1].tools,undefined);

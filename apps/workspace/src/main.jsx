@@ -203,8 +203,10 @@ function App() {
     set({ busy: true, error: '', notice: '' });
     try {
       await fn();
+      return true;
     } catch (e) {
       set('error', errorText(e));
+      return false;
     } finally {
       set('busy', false);
     }

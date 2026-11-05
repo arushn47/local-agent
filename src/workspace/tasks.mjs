@@ -202,9 +202,12 @@ export function createTasks(engine,projects,{sessionFile=join(stateDir,'sessions
       if(action==='resume'){
         if(s.queue?.some(item=>item.state!=='queued'))throw Error('queue_delivery_uncertain');
         if(runs.get(id)?.aborting||runs.get(id)?.uncertain)throw Error('queue_delivery_uncertain');
-        const states=(await client(s).session.status()).data;
-        if(!states||['busy','retry'].includes(states[id]?.type))throw Error('task_already_running');
-        const state=runs.get(id)?.state;if(state&&state!=='running'&&state!=='completed')runs.delete(id);
+        const state=runs.get(id)?.state;
+        if(state!=='running'){
+          const states=(await client(s).session.status()).data;
+          if(!states||['busy','retry'].includes(states[id]?.type))throw Error('task_already_running');
+          if(state&&state!=='completed')runs.delete(id);
+        }
         s.queuePaused=false;save();return;
       }
       const item=s.queue?.find(item=>item.id===messageId);if(!item)throw Error('queued_message_not_found');

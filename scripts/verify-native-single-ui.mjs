@@ -49,6 +49,7 @@ export async function verifyNativeSingleUI({engine,config,profile,getCalls}){
             await queued.getByRole('button',{name:'Steer now',exact:true}).click();
             await queued.waitFor({state:'hidden'});
             await composer.fill('CASE_single_ui Queued follow-up: report the finished result.');await page.getByRole('button',{name:'Queue message',exact:true}).click();
+            await page.getByRole('button',{name:'Resume queue',exact:true}).click();
             steered=true;
           }
           answered.add(permission.id);approvals.push(permission.permission);await card.getByRole('button',{name:'Allow once',exact:true}).click();
