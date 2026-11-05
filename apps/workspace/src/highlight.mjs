@@ -20,13 +20,16 @@ export async function highlightCode(root, isCurrent, theme = 'github-dark') {
   const h = await highlighter;
   for (const code of root.querySelectorAll('pre > code')) {
     if (!isCurrent()) return;
+    const lines = [...code.querySelectorAll('.line-text')];
+    const source = lines.length ? lines.map(line => line.textContent).join('\n') : code.textContent;
     const lang = code.className.replace('language-', '');
-    if (code.textContent.length > 8000 || !h.getLoadedLanguages().includes(lang)) continue;
+    if (source.length > 8000 || !h.getLoadedLanguages().includes(lang)) continue;
     const activeTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'github-light' : 'github-dark';
-    const {tokens} = h.codeToTokens(code.textContent, {lang, theme: activeTheme});
+    const {tokens} = h.codeToTokens(source, {lang, theme: activeTheme});
     const fragment = document.createDocumentFragment();
     tokens.forEach((line, index) => {
-      if (index) fragment.append('\n');
+      const target = lines.length ? document.createDocumentFragment() : fragment;
+      if (index && !lines.length) fragment.append('\n');
       for (const token of line) {
         const span = document.createElement('span');
         span.textContent = token.content;
@@ -35,9 +38,10 @@ export async function highlightCode(root, isCurrent, theme = 'github-dark') {
           c = activeTheme === 'github-light' ? '#57606a' : '#9da7b3';
         }
         span.style.color = c;
-        fragment.append(span);
+        target.append(span);
       }
+      if (lines[index]) lines[index].replaceChildren(target);
     });
-    code.replaceChildren(fragment);
+    if (!lines.length) code.replaceChildren(fragment);
   }
 }

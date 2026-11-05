@@ -676,6 +676,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* Files Panel */
 .files-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.wf-stage-header { width: 100%; font: inherit; color: inherit; text-align: left; border: 0; }
+.wf-step-disclosure { border: 0; background: transparent; font: inherit; padding: 0; }
 .files-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); flex: 1; min-height: 0; }
 .tree {
   border-right: 1px solid var(--line);
@@ -685,6 +687,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   color: var(--muted);
 }
 .tree-row {
+  width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
   display: flex;
   align-items: center;
   gap: 5px;

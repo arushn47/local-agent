@@ -1,6 +1,6 @@
 import { onMount, onCleanup } from 'solid-js';
 export function Modal(props){let element,previous;
-  onMount(()=>{previous=props.returnFocus||document.activeElement;queueMicrotask(()=>element.querySelector('#provider-key')?.focus());});
+  onMount(()=>{previous=props.returnFocus||document.activeElement;queueMicrotask(()=>element.querySelector('#provider-key, [autofocus], input:not(:disabled), textarea:not(:disabled), button:not(:disabled)')?.focus());});
   onCleanup(()=>{queueMicrotask(()=>{const target=previous?.isConnected?previous:document.querySelector('.nav-item[aria-current="page"]');target?.focus();});});
   function keydown(e){
     if(e.key==='Escape'&&!props.busy){e.preventDefault();props.onClose();}

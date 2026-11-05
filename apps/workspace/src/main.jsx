@@ -14,6 +14,7 @@ import { StatusBar } from './StatusBar';
 import { ContextUsage } from './ContextUsage';
 import { Markdown } from './MessageMarkdown.jsx';
 import { WorkflowsPanel } from './WorkflowsPanel';
+import { commandOutcome, isTestCommand } from './tool-outcomes.mjs';
 
 const providerNames = { gemini: 'Google Gemini', groq: 'Groq', openrouter: 'OpenRouter', ollama: 'Ollama' };
 const stateNames = {
@@ -207,8 +208,9 @@ function App() {
   }
 
   async function chooseProject(id) {
-    set({ project: id, session: null, snapshot: null, view: 'workspace', showProjectModal: false });
+    set({ project: id, session: null, sessions: [], snapshot: null, view: 'workspace', showProjectModal: false });
     const list = await api('projects/' + id + '/sessions');
+    if(s.project !== id) return;
     set('sessions', list);
     if (list.length > 0 && !s.session) {
       set('session', list[0].id);
@@ -239,9 +241,12 @@ function App() {
 
   async function createNewTask() {
     if (!s.project || active()) return;
+    const projectId=s.project;
     await action(async () => {
-      const created = await api('projects/' + s.project + '/sessions', {});
-      set('sessions', await api('projects/' + s.project + '/sessions'));
+      const created = await api('projects/' + projectId + '/sessions', {});
+      const sessions=await api('projects/' + projectId + '/sessions');
+      if(s.project !== projectId) return;
+      set('sessions', sessions);
       set('session', created.id);
       set('snapshot', null);
       await refresh({ includeSession: true });
@@ -249,6 +254,7 @@ function App() {
   }
 
   async function selectSession(sessionId) {
+    if(!s.sessions.some(session=>session.id===sessionId)) return;
     await action(async () => {
       set({ session: sessionId, snapshot: null });
       await refresh({ includeSession: true });
@@ -258,16 +264,21 @@ function App() {
   async function sendPrompt(e) {
     e.preventDefault();
     if (!s.draft.trim() || active()) return;
+    const projectId=s.project,text=s.draft;
     await action(async () => {
       let id = s.session;
       if (!id) {
-        const session = await api('projects/' + s.project + '/sessions', {});
+        const session = await api('projects/' + projectId + '/sessions', {});
+        if(s.project !== projectId) return;
         id = session.id;
         set('session', id);
       }
-      await api('sessions/' + id + '/prompt', { text: s.draft });
-      set('draft', '');
-      set('sessions', await api('projects/' + s.project + '/sessions'));
+      await api('sessions/' + id + '/prompt', { text });
+      if(s.project !== projectId || s.session !== id) return;
+      if(s.draft === text) set('draft', '');
+      const sessions=await api('projects/' + projectId + '/sessions');
+      if(s.project !== projectId || s.session !== id) return;
+      set('sessions', sessions);
       await refresh({ includeSession: true });
     });
   }
@@ -375,15 +386,16 @@ function App() {
   });
 
   const lastTest = createMemo(() => {
-    const bashTools = s.snapshot?.messages?.flatMap((m) => m.parts).filter((p) => p.type === 'tool' && p.tool === 'bash' && /test|pytest|vitest|jest/i.test(p.command || '')) || [];
+    const bashTools = s.snapshot?.messages?.flatMap((m) => m.parts).filter((p) => p.type === 'tool' && p.tool === 'bash' && isTestCommand(p.command || '')) || [];
     return bashTools.at(-1);
   });
 
   const testStatus = createMemo(() => {
     if (!lastTest()) return null;
     return {
-      passed: lastTest().exit === 0,
-      text: lastTest().exit === 0 ? 'passed' : `failed (exit ${lastTest().exit ?? 1})`
+      passed: commandOutcome(lastTest()).kind === 'pass',
+      kind: commandOutcome(lastTest()).kind,
+      text: commandOutcome(lastTest()).label
     };
   });
 
@@ -929,7 +941,7 @@ function App() {
                 aria-selected={s.inspectorTab === 'tests'}
                 onClick={() => set('inspectorTab', 'tests')}
               >
-                <Show when={lastTest()}><span class={lastTest()?.exit === 0 ? 'ok' : 'fail'}>● </span></Show>
+                <Show when={lastTest()}><span aria-hidden="true" class={commandOutcome(lastTest()).kind === 'pass' ? 'ok' : commandOutcome(lastTest()).kind === 'fail' ? 'fail' : 'muted'}>● </span></Show>
                 Tests
               </button>
               <button

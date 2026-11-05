@@ -10,13 +10,8 @@ export function StatusBar(props) {
 
   const contextText = () => {
     const ctx = props.context;
-    if (!ctx || ctx.inputTokens === undefined) return 'ctx: unknown';
-    const k = Math.round(ctx.inputTokens / 1024);
-    if (primaryTarget()?.contextWindow) {
-      const maxK = Math.round(primaryTarget().contextWindow / 1024);
-      return `ctx ${k}K / ${maxK}K`;
-    }
-    return `ctx ${k}K`;
+    if (!ctx || ctx.inputTokens == null) return 'last input: unknown';
+    return `last input: ${(ctx.inputIncludingCache ?? ctx.inputTokens).toLocaleString()} tokens`;
   };
 
   return (
@@ -37,7 +32,7 @@ export function StatusBar(props) {
       <div class="status-right">
         <Show when={props.testStatus}>
           <span class="status-item">
-            tests <span class={props.testStatus.passed ? 'ok' : 'fail'}>{props.testStatus.text}</span>
+            tests <span class={props.testStatus.kind === 'pass' ? 'ok' : props.testStatus.kind === 'fail' ? 'fail' : 'muted'}>{props.testStatus.text}</span>
           </span>
           <span class="status-sep">·</span>
         </Show>

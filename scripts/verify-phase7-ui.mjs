@@ -245,7 +245,7 @@ try {
   assert.ok(await status.getByText('Local runtime').isVisible(), 'Status bar runtime indicator missing');
   assert.ok(await status.getByText('free-only', { exact: true }).isVisible(), 'Status bar free-only badge missing');
   assert.ok(await status.getByText(/route: meta-llama/).isVisible(), 'Status bar route indicator missing');
-  assert.ok(await status.getByText(/ctx 2K/).isVisible(), 'Status bar context indicator missing');
+  assert.ok(await status.getByText(/last input: 3,100 tokens/).isVisible(), 'Status must label the last completed input including cache, without implying current occupancy');
   report.checkpoints.checkpoint7_5_status_bar = true;
 
   // Checkpoint 7.6: Accessibility Audit & Responsive Reflow

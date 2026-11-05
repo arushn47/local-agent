@@ -1,5 +1,7 @@
-import { readdirSync, statSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
-import { resolve, relative, join, sep, extname } from 'node:path';
+import { readdirSync, statSync, readFileSync, realpathSync, openSync, closeSync, fstatSync, constants } from 'node:fs';
+import { join, sep, extname } from 'node:path';
+import { assertPublicFile, confinedPath } from './workflow-storage.mjs';
+import { createHash } from 'node:crypto';
 
 const forbiddenDirPatterns = /^(?:\.git|\.localagent|\.runtime|node_modules|coverage)$/i;
 const forbiddenFilePatterns = /^(?:\.env.*|.*credential.*|.*secret.*|.*id_rsa.*|.*\.pem|.*\.key)$/i;
@@ -41,9 +43,10 @@ export function listProjectFiles(projectRoot, { maxFiles = 500 } = {}) {
       if (forbiddenFilePatterns.test(name)) continue;
 
       const relPath = relDir ? `${relDir}/${name}` : name;
-      const fullPath = join(base, relPath);
 
       try {
+        assertPublicFile(relPath);
+        const fullPath = confinedPath(base, relPath);
         const canonical = realpathSync(fullPath);
         if (!canonical.toLowerCase().startsWith((base + sep).toLowerCase()) && canonical.toLowerCase() !== base.toLowerCase()) {
           continue;
@@ -75,39 +78,32 @@ export function readProjectFile(projectRoot, relFilePath, { maxBytes = 1024 * 10
   if (typeof relFilePath !== 'string' || !relFilePath.trim()) {
     throw Error('invalid_file_path');
   }
-  const base = realpathSync(projectRoot);
-  let canonical;
+  let target;
   try {
-    const target = resolve(base, relFilePath);
-    canonical = realpathSync(target);
-  } catch {
+    target = confinedPath(projectRoot, assertPublicFile(relFilePath));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw Error('project_file_denied');
     throw Error('project_file_not_found');
   }
-
-  if (!canonical.toLowerCase().startsWith((base + sep).toLowerCase())) {
-    throw Error('project_file_denied');
-  }
-
-  let cursor = base;
-  for (const part of relative(base, canonical).split(sep)) {
-    cursor = join(cursor, part);
-    if (lstatSync(cursor).isSymbolicLink()) throw Error('project_file_denied');
-  }
-
   const filename = relFilePath.split(/[/\\]/).pop();
-  if (forbiddenFilePatterns.test(filename)) {
-    throw Error('project_file_denied');
-  }
-
-  const stat = statSync(canonical);
-  if (!stat.isFile()) throw Error('project_file_denied');
-  if (stat.size > maxBytes) throw Error('project_file_too_large');
-
-  const content = readFileSync(canonical, 'utf8');
+  let stat, content, sha256, fd;
+  try {
+    fd = openSync(target, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    stat = fstatSync(fd);
+    if (!stat.isFile() || stat.nlink !== 1 || stat.ino !== statSync(target).ino) throw Error('project_file_denied');
+    if (stat.size > maxBytes) throw Error('project_file_too_large');
+    const bytes = readFileSync(fd);
+    if (bytes.length > maxBytes) throw Error('project_file_too_large');
+    if (bytes.includes(0)) throw Error('project_file_binary');
+    try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+    catch { throw Error('project_file_binary'); }
+    sha256 = createHash('sha256').update(bytes).digest('hex');
+  } finally { if (fd !== undefined) closeSync(fd); }
   return {
     path: relFilePath.replaceAll('\\', '/'),
     name: filename,
     size: stat.size,
+    sha256,
     content
   };
 }

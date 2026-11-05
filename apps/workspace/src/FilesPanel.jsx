@@ -1,4 +1,4 @@
-import { For, Show, createSignal, createEffect } from 'solid-js';
+import { For, Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import { api, errorText } from './api';
 
 export function FilesPanel(props) {
@@ -9,14 +9,18 @@ export function FilesPanel(props) {
   const [fileData, setFileData] = createSignal(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [fileLoading, setFileLoading] = createSignal(false);
+  let projectGeneration = 0, fileGeneration = 0;
   let codeContainer;
 
   async function loadFiles() {
-    if (!props.project?.id) return;
+    const projectId = props.project?.id, generation = projectGeneration;
+    if (!projectId) return;
     setLoading(true);
     setError('');
     try {
-      const items = await api(`projects/${props.project.id}/files`);
+      const items = await api(`projects/${projectId}/files`);
+      if (generation !== projectGeneration) return;
       setFiles(items);
       // Auto-expand top-level directories
       const dirs = new Set();
@@ -27,40 +31,49 @@ export function FilesPanel(props) {
       }
       setExpandedDirs(dirs);
       // If nothing selected, select first file
-      if (!selectedPath()) {
+      if (selectedPath()) void selectFile(selectedPath());
+      else {
         const firstFile = items.find(i => i.type === 'file');
         if (firstFile) selectFile(firstFile.path);
       }
     } catch (e) {
-      setError(errorText(e));
+      if (generation === projectGeneration) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (generation === projectGeneration) setLoading(false);
     }
   }
 
   async function selectFile(path) {
     if (!props.project?.id || !path) return;
+    const projectId = props.project.id, generation = projectGeneration, request = ++fileGeneration;
     setSelectedPath(path);
+    setFileData(null);
+    setFileLoading(true);
     setError('');
     try {
-      const data = await api(`projects/${props.project.id}/files/content?path=${encodeURIComponent(path)}`);
-      setFileData(data);
+      const data = await api(`projects/${projectId}/files/content?path=${encodeURIComponent(path)}`);
+      if (generation === projectGeneration && request === fileGeneration) setFileData(data);
     } catch (e) {
-      setFileData({ path, name: path.split('/').pop(), content: `Unable to display file: ${errorText(e)}` });
-    }
+      if (generation === projectGeneration && request === fileGeneration) setError(errorText(e));
+    } finally { if (generation === projectGeneration && request === fileGeneration) setFileLoading(false); }
   }
 
   createEffect(() => {
     props.project?.id;
+    projectGeneration++; fileGeneration++;
+    setFiles([]); setExpandedDirs(new Set()); setError(''); setLoading(false); setFileLoading(false);
     setSelectedPath('');
     setFileData(null);
     void loadFiles();
   });
+  onCleanup(() => { projectGeneration++; fileGeneration++; });
 
   createEffect(() => {
     const _theme = props.theme;
+    let current = true;
+    onCleanup(() => { current = false; });
     if (fileData() && codeContainer) {
-      const active = () => true;
+      const active = () => current;
       void import('./highlight.mjs').then((m) => m.highlightCode(codeContainer, active)).catch(() => {});
     }
   });
@@ -80,8 +93,9 @@ export function FilesPanel(props) {
 
   const visibleFiles = () => {
     if (subtab() === 'changed') {
+      const base = (props.project?.path || '').replaceAll('\\', '/').replace(/\/$/, '');
       return (props.diffs || []).map(d => ({
-        path: d.file,
+        path: d.file.replaceAll('\\', '/').toLowerCase().startsWith(base.toLowerCase() + '/') ? d.file.replaceAll('\\', '/').slice(base.length + 1) : d.file,
         name: d.file.split(/[/\\]/).pop(),
         type: 'file',
         changed: true,
@@ -144,6 +158,7 @@ export function FilesPanel(props) {
           CHANGED ({props.diffs?.length || 0})
         </button>
         <span class="spacer" />
+        <button type="button" class="btn-sm" disabled={loading()} onClick={loadFiles}>Refresh files</button>
         <span class="subtab-meta">read-only view</span>
       </div>
 
@@ -157,12 +172,12 @@ export function FilesPanel(props) {
           </Show>
           <For each={visibleFiles()}>
             {(item) => (
-              <div
+              <button type="button"
                 class={'tree-row ' + (item.type === 'directory' ? 'dir ' : '') + (selectedPath() === item.path ? 'sel' : '')}
                 style={{ 'padding-left': `${(item.depth || 0) * 14 + 8}px` }}
                 onClick={() => (item.type === 'directory' ? toggleDir(item.path) : selectFile(item.path))}
-                role="button"
-                tabindex="0"
+                aria-expanded={item.type === 'directory' ? expandedDirs().has(item.path) : undefined}
+                aria-pressed={item.type === 'file' ? selectedPath() === item.path : undefined}
                 aria-label={item.name + (item.type === 'directory' ? ' folder' : ' file')}
               >
                 <Show when={item.type === 'directory'}>
@@ -178,7 +193,7 @@ export function FilesPanel(props) {
                 <Show when={!item.changed && item.type === 'file' && item.size !== undefined}>
                   <span class="sz">{formatSize(item.size)}</span>
                 </Show>
-              </div>
+              </button>
             )}
           </For>
         </div>
@@ -193,6 +208,7 @@ export function FilesPanel(props) {
               <button
                 type="button"
                 class="btn-sm"
+                disabled={!fileData() || fileLoading()}
                 onClick={() => props.onEditViaAgent?.(`Check ${selectedPath()} and `)}
               >
                 Edit via agent
@@ -201,8 +217,8 @@ export function FilesPanel(props) {
           </div>
 
           <div class="viewer-code-wrapper" ref={codeContainer}>
-            <Show when={fileData()} fallback={<div class="viewer-empty">Select a file from the explorer to view its contents.</div>}>
-              <pre class="code" role="region" aria-label="File contents, read only">
+            <Show when={fileData()} fallback={<div class="viewer-empty" role="status">{fileLoading() ? 'Loading file…' : 'Select a file from the explorer to view its contents.'}</div>}>
+              <pre class="code" role="region" aria-label="File contents, read only" tabindex="0">
                 <code class={'language-' + getLanguage(fileData()?.name)}>
                   <For each={codeLines()}>
                     {(line, index) => (
@@ -224,6 +240,7 @@ export function FilesPanel(props) {
         <button
           type="button"
           class="btn-sm"
+          disabled={!selectedPath()}
           onClick={() => {
             if (selectedPath()) navigator.clipboard?.writeText(selectedPath());
           }}

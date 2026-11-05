@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from 'solid-js';
+import { commandOutcome } from './tool-outcomes.mjs';
 
 export function extractCommands(messages, permissions = []) {
   const list = [];
@@ -13,12 +14,14 @@ export function extractCommands(messages, permissions = []) {
           status: p.status || (p.exit === 0 ? 'completed' : p.exit !== undefined ? 'error' : 'running'),
           exit: p.exit,
           output: p.output || '',
+          outcome: commandOutcome(p),
           time: timeStr
         });
       }
     }
   }
   for (const perm of permissions || []) {
+    if (perm.permission !== 'bash') continue;
     list.push({
       id: `perm_${perm.id}`,
       command: perm.patterns?.join(', ') || perm.permission || 'permission needed',
@@ -50,15 +53,7 @@ export function CommandsPanel(props) {
                   <Show when={cmd.status === 'awaiting_permission'}>
                     <span class="cmd-badge warn">● permission</span>
                   </Show>
-                  <Show when={cmd.exit === 0}>
-                    <span class="cmd-badge pass">✓ exit 0</span>
-                  </Show>
-                  <Show when={cmd.exit !== undefined && cmd.exit !== 0}>
-                    <span class="cmd-badge fail">✕ exit {cmd.exit}</span>
-                  </Show>
-                  <Show when={cmd.status === 'running' || (cmd.exit === undefined && cmd.status !== 'awaiting_permission')}>
-                    <span class="cmd-badge busy">● running</span>
-                  </Show>
+                  <Show when={!cmd.isPermission}><span class={'cmd-badge ' + cmd.outcome.kind}>{cmd.outcome.label}</span></Show>
                   <code class="command-text">{cmd.command}</code>
                   <Show when={cmd.time}>
                     <span class="command-time">{cmd.time}</span>
@@ -110,15 +105,7 @@ export function CommandsDock(props) {
                   <Show when={cmd.status === 'awaiting_permission'}>
                     <span class="warn">●</span> awaiting permission: {cmd.command}
                   </Show>
-                  <Show when={cmd.exit === 0}>
-                    <span class="ok">✓</span> {cmd.command} <span class="dim">· exit 0</span>
-                  </Show>
-                  <Show when={cmd.exit !== undefined && cmd.exit !== 0}>
-                    <span class="fail">✕</span> {cmd.command} <span class="dim">· exit {cmd.exit}</span>
-                  </Show>
-                  <Show when={cmd.status === 'running' || (cmd.exit === undefined && cmd.status !== 'awaiting_permission')}>
-                    <span class="busy">●</span> {cmd.command} <span class="dim">· running</span>
-                  </Show>
+                  <Show when={!cmd.isPermission}><span class={cmd.outcome.kind}>{cmd.command}</span> <span class="dim">· {cmd.outcome.label}</span></Show>
                 </div>
               )}
             </For>

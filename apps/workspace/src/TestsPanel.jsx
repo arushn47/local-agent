@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from 'solid-js';
+import { commandOutcome, isTestCommand } from './tool-outcomes.mjs';
 
 export function extractTests(messages) {
   const tests = [];
@@ -7,12 +8,13 @@ export function extractTests(messages) {
     for (const p of m.parts || []) {
       if (p.type === 'tool' && p.tool === 'bash') {
         const cmd = p.command || '';
-        if (/test|pytest|vitest|jest|cargo test|go test|npm run test/i.test(cmd)) {
+        if (isTestCommand(cmd)) {
           tests.push({
             id: `test_${idx++}`,
             command: cmd,
             exit: p.exit,
-            passed: p.exit === 0,
+            passed: commandOutcome(p).kind === 'pass',
+            outcome: commandOutcome(p),
             output: p.output || '',
             status: p.status
           });
@@ -32,8 +34,8 @@ export function TestsPanel(props) {
       <div class="tests-head">
         <span class="tests-title">Test results ({tests().length})</span>
         <Show when={latest()}>
-          <span class={'test-status-pill ' + (latest().passed ? 'pass' : 'fail')}>
-            {latest().passed ? '● Last run passed' : '● Last run failed'}
+          <span class={'test-status-pill ' + latest().outcome.kind}>
+            {latest().outcome.kind === 'pass' ? '● Last run passed' : latest().outcome.kind === 'fail' ? '● Last run failed' : '● Last run ' + latest().outcome.label}
           </span>
         </Show>
       </div>
@@ -50,10 +52,10 @@ export function TestsPanel(props) {
         }>
           <For each={[...tests()].reverse()}>
             {(t) => (
-              <div class={'test-card ' + (t.passed ? 'pass' : 'fail')}>
+              <div class={'test-card ' + t.outcome.kind}>
                 <div class="test-card-top">
-                  <span class={'result-badge ' + (t.passed ? 'result-pass' : 'result-fail')}>
-                    {t.passed ? '✓ PASSED' : `✕ FAILED (exit ${t.exit ?? 1})`}
+                  <span class={'result-badge result-' + t.outcome.kind}>
+                    {t.passed ? '✓ PASSED' : t.outcome.kind === 'fail' ? `✕ FAILED (${t.outcome.label})` : t.outcome.label}
                   </span>
                   <code class="test-command">{t.command}</code>
                 </div>
