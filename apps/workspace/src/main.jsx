@@ -1,6 +1,6 @@
 import { render } from 'solid-js/web';
 import { For, Show, onMount, onCleanup, createMemo, createEffect } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { api, errorText } from './api';
 import './style.css';
 import { Modal } from './Modal';
@@ -191,7 +191,7 @@ function App() {
       if (includeSession && s.session) {
         const id = s.session;
         const snap = await api('sessions/' + id);
-        if (id === s.session) set('snapshot', snap);
+        if (id === s.session) set('snapshot', reconcile(snap));
       }
       set('connected', true);
     } catch {

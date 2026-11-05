@@ -4,8 +4,8 @@ import {Modal} from './Modal';
 const purposes={balanced:'General coding',scan:'Project understanding',reasoning:'Planning / difficult debugging',coding:'Implementation',quick:'Small changes / tests'};
 export function ModelPicker(props){
   const [purpose,setPurpose]=createSignal('balanced'),[models,setModels]=createSignal([]),[open,setOpen]=createSignal(false),[error,setError]=createSignal('');
-  let revision=0;
-  createEffect(()=>{setPurpose(props.session?.purpose||'balanced');});
+  let revision=0,sessionKey;
+  createEffect(()=>{const value=props.session?.purpose||'balanced',key=`${props.session?.id||''}:${value}`;if(key!==sessionKey){sessionKey=key;setPurpose(value);}});
   createEffect(()=>{const value=purpose(),generation=++revision;void api('model-options?purpose='+value).then(result=>{if(generation===revision)setModels(result.models||[]);}).catch(()=>{if(generation===revision)setModels([]);});});
   async function choose(modelId){setError('');try{await props.onSelect(modelId,purpose());}catch(e){setError(errorText(e));}}
   return <div class="model-controls">
