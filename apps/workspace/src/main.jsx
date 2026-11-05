@@ -7,6 +7,7 @@ import { Modal } from './Modal';
 import { createRefreshQueue } from './refresh.mjs';
 import { BuilderPanel } from './BuilderPanel';
 import { FilesPanel } from './FilesPanel';
+import {ChatQueue} from './ChatQueue';
 import { CommandsPanel, CommandsDock } from './CommandsPanel';
 import { ChangesPanel } from './ChangesPanel';
 import { TestsPanel } from './TestsPanel';
@@ -14,6 +15,8 @@ import { StatusBar } from './StatusBar';
 import { ContextUsage } from './ContextUsage';
 import { Markdown } from './MessageMarkdown.jsx';
 import { WorkflowsPanel } from './WorkflowsPanel';
+import {ModelPicker} from './ModelPicker';
+import {ProjectMemory} from './ProjectMemory';
 import { commandOutcome, isTestCommand } from './tool-outcomes.mjs';
 
 const providerNames = { gemini: 'Google Gemini', groq: 'Groq', openrouter: 'OpenRouter', ollama: 'Ollama' };
@@ -239,11 +242,12 @@ function App() {
     });
   }
 
-  async function createNewTask() {
+  async function createNewTask(modelId, purpose) {
     if (!s.project || active()) return;
     const projectId=s.project;
     await action(async () => {
       const created = await api('projects/' + projectId + '/sessions', {});
+      if(typeof modelId==='string')await api('sessions/'+created.id+'/model',{modelId,purpose});
       const sessions=await api('projects/' + projectId + '/sessions');
       if(s.project !== projectId) return;
       set('sessions', sessions);
@@ -251,6 +255,12 @@ function App() {
       set('snapshot', null);
       await refresh({ includeSession: true });
     });
+  }
+
+  async function chooseModel(modelId,purpose){
+    if(active())throw Error('task_already_running');
+    if(!s.session){await createNewTask(modelId,purpose);return;}
+    await api('sessions/'+s.session+'/model',{modelId,purpose});await refresh({includeSession:true});
   }
 
   async function selectSession(sessionId) {
@@ -263,7 +273,7 @@ function App() {
 
   async function sendPrompt(e) {
     e.preventDefault();
-    if (!s.draft.trim() || active()) return;
+    if (!s.draft.trim() || s.busy) return;
     const projectId=s.project,text=s.draft;
     await action(async () => {
       let id = s.session;
@@ -273,7 +283,7 @@ function App() {
         id = session.id;
         set('session', id);
       }
-      await api('sessions/' + id + '/prompt', { text });
+      await api('sessions/' + id + (active()?'/queue':'/prompt'), { text });
       if(s.project !== projectId || s.session !== id) return;
       if(s.draft === text) set('draft', '');
       const sessions=await api('projects/' + projectId + '/sessions');
@@ -841,6 +851,7 @@ function App() {
             {/* Composer */}
             <div class="composer-wrap">
               <ContextUsage context={s.snapshot?.context} />
+              <ChatQueue session={s.snapshot?.session} busy={s.busy} onAction={input=>action(async()=>{await api('sessions/'+s.session+'/queue-action',input);await refresh({includeSession:true});})}/>
               <form class="composer" onSubmit={sendPrompt}>
                 <label class="sr-only" for="task-prompt">Describe your coding task</label>
                 <textarea
@@ -867,6 +878,7 @@ function App() {
                       Start task <Icon name="arrow" size={13} />
                     </button>
                   }>
+                    <button type="submit" class="send-btn primary" disabled={s.busy||!s.draft.trim()}>Queue message</button>
                     <button
                       type="button"
                       class="secondary"
@@ -877,6 +889,8 @@ function App() {
                   </Show>
                 </div>
               </form>
+              <ModelPicker session={s.snapshot?.session||s.sessions.find(session=>session.id===s.session)} busy={s.busy||active()} onSelect={chooseModel}/>
+              <ProjectMemory projectId={s.project}/>
               <div class="hint-row">
                 <span>Enter to send · Shift+Enter for new line · Ctrl+Alt+P panels</span>
                 <span>Local draft · {s.status?.plan?.targets?.length ? 'eligible free route' : 'no coding model available'}</span>
@@ -973,6 +987,8 @@ function App() {
             </Show>
             <Show when={s.inspectorTab === 'files'}>
               <FilesPanel
+                activity={s.snapshot?.activity}
+                sessionId={s.session}
                 project={project()}
                 diffs={s.snapshot?.diffs}
                 theme={s.theme}

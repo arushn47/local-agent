@@ -11,7 +11,7 @@ import {createTasks} from '../src/workspace/tasks.mjs';
 const projectId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const sessionId = 'ses_recovery_fixture';
 
-function fixture({busy = true, markers = 1} = {}) {
+function fixture({busy = true, markers = 1, directory} = {}) {
   const created = Date.now();
   const base = [
     {info:{id:'msg_user_1',role:'user',time:{created}},parts:[
@@ -43,14 +43,14 @@ function fixture({busy = true, markers = 1} = {}) {
     },
     permission:{list:async() => ({data:[]})},
   })};
-  const projects = {get:() => ({id:projectId,name:'Recovery fixture',path:join(tmpdir(),'localagent-recovery-project')}), list:() => []};
+  const projects = {get:() => ({id:projectId,name:'Recovery fixture',path:directory}), list:() => []};
   return {engine,projects,calls};
 }
 
 async function withTasks(options, run) {
   const directory = mkdtempSync(join(tmpdir(),'localagent-recovery-'));
   const sessionFile = join(directory,'sessions.json');
-  const {engine,projects,calls} = fixture(options);
+  const {engine,projects,calls} = fixture({...options,directory});
   const tasks = createTasks(engine,projects,{sessionFile});
   try {
     const session = await tasks.create(projectId);
@@ -82,7 +82,7 @@ test('restarting after a compaction boundary restores history without replaying 
   const directory = mkdtempSync(join(tmpdir(),'localagent-restart-'));
   const sessionFile = join(directory,'sessions.json');
   try {
-    const first = fixture({busy:false});
+    const first = fixture({busy:false,directory});
     const tasks = createTasks(first.engine,first.projects,{sessionFile});
     const session = await tasks.create(projectId);
     const before = await tasks.snapshot(session.id);
@@ -91,7 +91,7 @@ test('restarting after a compaction boundary restores history without replaying 
     assert.ok(existsSync(sessionFile),'session reference was not persisted');
 
     // A fresh process re-reads only the durable session reference.
-    const second = fixture({busy:false});
+    const second = fixture({busy:false,directory});
     const restarted = createTasks(second.engine,second.projects,{sessionFile});
     try {
       assert.deepEqual(JSON.parse(readFileSync(sessionFile,'utf8')).map(s=>s.id),[sessionId]);

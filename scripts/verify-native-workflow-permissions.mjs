@@ -30,6 +30,7 @@ try{
  guard=createGuard({config:{outputTokens:100},secret:secrets(),env:()=>({OPENROUTER_API_KEY:'fixture-only'}),catalog:()=>catalog,budgetLedger:new BudgetLedger({storageFile:join(process.env.LOCALAGENT_STATE_DIR,'budget-ledger.json')}),scopeStore:new WorkflowScopes(join(process.env.LOCALAGENT_STATE_DIR,'workflow-scopes.json')),auditPath:join(process.env.LOCALAGENT_STATE_DIR,'fixture-audit.jsonl'),fetcher:async(url,options)=>{
   calls++;const body=JSON.parse(options.body),messages=body.messages;console.log(JSON.stringify({providerTools:body.tools?.map(t=>t.function?.name),calls}));
   const text=JSON.stringify(messages),name=text.match(/CASE_([a-z_]+)/)?.[1]||(process.argv.includes('--single')?'single_ui':null);assert.ok(name,'scenario identity');
+  if(process.argv.includes('--single')){assert.ok(text.includes('Deterministic project brief: double multiplies by two'));console.log(JSON.stringify({fixtureSteeringSeen:text.includes('Steering: preserve fixed tests'),fixtureQueuedSeen:text.includes('Queued follow-up')}));}
   const directory=join(process.env.LOCALAGENT_STATE_DIR,name.endsWith('_ui')?'ui-flow':name),file=join(directory,'target.mjs');
   const n=messages.filter(m=>m.role==='tool').length,isEdit=name.startsWith('edit'),isReview=name.startsWith('review'),isSingle=name.startsWith('single');
   let tool,args;

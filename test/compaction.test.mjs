@@ -11,7 +11,7 @@ import {createTasks, safeMessages} from '../src/workspace/tasks.mjs';
 const projectId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const sessionId = 'ses_compaction_fixture';
 
-function fixture({withUsage = true, startedAt = 0} = {}) {
+function fixture({withUsage = true, startedAt = 0, directory} = {}) {
   const created = Math.max(Date.now(), startedAt) + 5;
   const messages = [
     {info:{id:'msg_user_1',role:'user',time:{created}},parts:[
@@ -45,13 +45,13 @@ function fixture({withUsage = true, startedAt = 0} = {}) {
     },
     permission:{list:async()=>({data:[{id:'perm_1',sessionID:sessionId,permission:'bash',patterns:['node --test']}]})},
   })};
-  const projects = {get:()=>({id:projectId,name:'Fixture',path:join(tmpdir(),'localagent-compaction-project')}),list:()=>[]};
+  const projects = {get:()=>({id:projectId,name:'Fixture',path:directory}),list:()=>[]};
   return {engine,projects,calls,messages};
 }
 
 async function withTasks(options, run) {
   const directory = mkdtempSync(join(tmpdir(), 'localagent-compaction-'));
-  const {engine,projects,calls,messages} = fixture(options);
+  const {engine,projects,calls,messages} = fixture({...options,directory});
   const tasks = createTasks(engine, projects, {sessionFile:join(directory,'sessions.json')});
   try {
     const session = await tasks.create(projectId);
@@ -106,7 +106,7 @@ test('missing usage and manual compaction markers stay honest', async () => {
 test('compaction does not replay the prompt or re-run tools', async () => {
   await withTasks({startedAt:Date.now()}, async ({tasks, session, calls, messages}) => {
     // Re-stamp the fixture so the run window covers the assistant messages.
-    const now = Date.now();
+    const now = Date.now() + 1000;
     for (const message of messages) {
       message.info.time = {created:now + 1,completed:now + 2};
       if (message.info.role === 'assistant') message.info.finish = 'stop';

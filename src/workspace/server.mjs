@@ -15,6 +15,7 @@ import { listTemplates } from './workflow-templates.mjs';
 import { getAllModels, validateModelAssignment } from './models.mjs';
 import { listCheckpoints, previewCheckpointRestore } from './checkpoints.mjs';
 import {previewWorkflowReview,approveWorkflowReview} from './workflow-review.mjs';
+import {readProjectMemory,updateProjectMemory} from './project-memory.mjs';
 const workflowReady=engine=>engine?.workflowReady===true&&engine?.permissionEnforcementVerified===true;
 const keys={gemini:'GEMINI_API_KEY',groq:'GROQ_API_KEY',openrouter:'OPENROUTER_API_KEY'};
 function send(res,status,value){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
@@ -71,6 +72,8 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
         }
       }
       const filesRoute=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/files(?:\/(content))?$/);
+      const memoryRoute=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/memory$/);
+      if(memoryRoute){const project=projects.get(memoryRoute[1]);if(req.method==='GET')return send(res,200,readProjectMemory(project.path));if(req.method==='POST')return send(res,200,updateProjectMemory(project.path,await json(req)));}
       if(filesRoute&&req.method==='GET'){const id=filesRoute[1],op=filesRoute[2];const prj=projects.get(id);if(!op)return send(res,200,listProjectFiles(prj.path));if(op==='content'){return send(res,200,readProjectFile(prj.path,url.searchParams.get('path')));}}
       const p=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)(?:\/(sessions))?$/);
       if(p){projects.get(p[1]);if(p[2]==='sessions'&&req.method==='GET')return send(res,200,tasks.list(p[1]));if(p[2]==='sessions'&&req.method==='POST')return send(res,201,await tasks.create(p[1]));if(!p[2]&&req.method==='DELETE'){if(tasks.active(p[1]))throw Error('task_already_running');previews?.stop(p[1]);projects.remove(p[1]);return send(res,200,{removed:true});}}
@@ -83,9 +86,13 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
         if(configuring)throw Error('configuration_in_progress');configuring=true;
         try{await credentials.update(provider[1],await json(req));const configured=await refreshProviders().then(()=>true).catch(()=>false);return send(res,200,{saved:true,routingReady:configured});}finally{configuring=false;}
       }
-      const session=path.match(/^\/api\/v1\/sessions\/([A-Za-z0-9_-]+)(?:\/(prompt|cancel|permission|history))?$/);
+      if(path==='/api/v1/model-options'&&req.method==='GET')return send(res,200,{models:engine?.modelOptions?.(url.searchParams.get('purpose')||'balanced')||[],basis:'Metadata fit, not measured coding quality. Quotas are unknown until observed.'});
+      const session=path.match(/^\/api\/v1\/sessions\/([A-Za-z0-9_-]+)(?:\/(prompt|cancel|permission|history|model|queue|queue-action))?$/);
       if(session){const id=session[1];if(session[2]==='history'&&req.method==='GET')return send(res,200,await tasks.history(id,url.searchParams.get('before')));if(!session[2]&&req.method==='GET')return send(res,200,await tasks.snapshot(id));if(req.method==='POST'){
         const body=await json(req);
+        if(session[2]==='model'){if(typeof body.modelId!=='string'||body.modelId.length>300)throw Error('invalid_model_selection');return send(res,200,await tasks.setModel(id,body.modelId,body.purpose));}
+        if(session[2]==='queue')return send(res,201,tasks.enqueue(id,body.text));
+        if(session[2]==='queue-action'){await tasks.queueAction(id,body);return send(res,200,{updated:true});}
         if(session[2]==='prompt'){const catalog=loadCatalog();if(!compilePlan(config,catalog).targets.length)throw Error('no_eligible_models');await tasks.prompt(id,body.text);return send(res,202,{accepted:true});}
         if(session[2]==='cancel'){await tasks.cancel(id);return send(res,200,{cancelled:true});}
         if(session[2]==='permission'){await tasks.permission(id,body.requestID,body.reply);return send(res,200,{replied:true});}
@@ -148,7 +155,7 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
       }
       return send(res,404,{error:'endpoint_not_found'});
     }catch(error){
-      const known=/^(invalid_|unknown_|key_|free_tier_|project_|private_|session_|task_|permission_|configuration_|no_eligible_|prompt_|snapshot_|preview_|checkpoint_|workflow_)/.test(error.message);
+      const known=/^(invalid_|unknown_|key_|free_tier_|project_|private_|session_|task_|permission_|configuration_|no_eligible_|prompt_|snapshot_|preview_|checkpoint_|workflow_|queue_|queued_|steering_)/.test(error.message);
       const status=error.message==='checkpoint_restore_approval_required'?428:error.message==='checkpoint_restore_conflict'||error.message==='invalid_checkpoint_active_workflow'?409:known?400:503;
       if(!known)console.error(JSON.stringify({scope:'workspace_api',type:error.name,frames:error.stack?.split('\n').slice(1,4)}));
       return send(res,status,{error:known?error.message:'runtime_unavailable'});

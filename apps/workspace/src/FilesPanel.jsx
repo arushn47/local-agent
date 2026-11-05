@@ -1,4 +1,4 @@
-import { For, Show, createSignal, createEffect, onCleanup } from 'solid-js';
+import { For, Show, createSignal, createEffect, onCleanup, untrack } from 'solid-js';
 import { api, errorText } from './api';
 
 export function FilesPanel(props) {
@@ -10,6 +10,8 @@ export function FilesPanel(props) {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal('');
   const [fileLoading, setFileLoading] = createSignal(false);
+  const [following,setFollowing]=createSignal(false);
+  let followedKey='';
   let projectGeneration = 0, fileGeneration = 0;
   let codeContainer;
 
@@ -67,6 +69,14 @@ export function FilesPanel(props) {
     void loadFiles();
   });
   onCleanup(() => { projectGeneration++; fileGeneration++; });
+
+  createEffect(()=>{
+    const activity=props.activity,enabled=following(),project=props.project?.id,session=props.sessionId;
+    if(!enabled||!activity){followedKey='';return;}
+    const key=JSON.stringify([project,session,activity]);
+    if(key===followedKey)return;followedKey=key;
+    untrack(()=>void selectFile(activity.path));
+  });
 
   createEffect(() => {
     const _theme = props.theme;
@@ -158,6 +168,7 @@ export function FilesPanel(props) {
           CHANGED ({props.diffs?.length || 0})
         </button>
         <span class="spacer" />
+        <button type="button" class="btn-sm" aria-pressed={following()} onClick={()=>setFollowing(!following())}>Follow agent</button>
         <button type="button" class="btn-sm" disabled={loading()} onClick={loadFiles}>Refresh files</button>
         <span class="subtab-meta">read-only view</span>
       </div>
@@ -175,7 +186,7 @@ export function FilesPanel(props) {
               <button type="button"
                 class={'tree-row ' + (item.type === 'directory' ? 'dir ' : '') + (selectedPath() === item.path ? 'sel' : '')}
                 style={{ 'padding-left': `${(item.depth || 0) * 14 + 8}px` }}
-                onClick={() => (item.type === 'directory' ? toggleDir(item.path) : selectFile(item.path))}
+                onClick={() => {if(item.type==='directory')toggleDir(item.path);else{setFollowing(false);void selectFile(item.path);}}}
                 aria-expanded={item.type === 'directory' ? expandedDirs().has(item.path) : undefined}
                 aria-pressed={item.type === 'file' ? selectedPath() === item.path : undefined}
                 aria-label={item.name + (item.type === 'directory' ? ' folder' : ' file')}
@@ -199,6 +210,7 @@ export function FilesPanel(props) {
         </div>
 
         <div class="viewer">
+          <Show when={following()}><p class="follow-status" role="status">{props.activity?`${props.activity.tool} · ${props.activity.status} · ${props.activity.path}`:'Following agent · waiting for file activity'} · contents refresh at tool boundaries</p></Show>
           <div class="viewer-head">
             <span class="viewer-filename">{fileData()?.path || selectedPath() || 'No file selected'}</span>
             <Show when={fileData()}>
