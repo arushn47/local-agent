@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestBudget, ProgressBudget, inputCeiling, compactionSettings } from '../src/context.mjs';
+import { requestBudget, ProgressBudget, inputCeiling, compactionSettings,engineContextWindow } from '../src/context.mjs';
+
+test('one shared compaction buffer preserves early compaction across different selected capacities',()=>{
+  for(const base of [32768,131072,256000]){
+    const settings=compactionSettings(base,1800);
+    for(const context of [base,base*2,1000000]){
+      const logical=engineContextWindow(context,settings,1800),trigger=logical-settings.buffer;
+      assert.ok(logical<=context);assert.ok(4*trigger<inputCeiling(context,1800));assert.ok(settings.keep.tokens<trigger);
+      if(context===base)assert.equal(logical,base);
+    }
+  }
+});
 const cap = contextWindow => ({ contextWindow, tools: true });
 const windows = [32768, 65536, 131072, 262144, 1048576];
 test('model-specific budgets skip incompatible local fallback without altering history', () => {

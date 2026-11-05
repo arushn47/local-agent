@@ -9,6 +9,7 @@ import {withoutWorkspaceAuthentication} from '../runtime-environment.mjs';
 import { workflowAgents, exactWorkflowModel } from './workflow-models.mjs';
 import { loadCatalog } from '../catalog.mjs';
 import { verifyNativeRole } from './native-permissions.mjs';
+import {rankTaskModels,resolveSingleModel} from './model-selection.mjs';
 export async function startEngine({port=20144,profileName='opencode-profile',onChild=()=>{},signal,workflowTransport} = {}) {
   const profile=join(stateDir,profileName);for(const p of ['config','data','cache'])mkdirSync(join(profile,p),{recursive:true});
   const config=JSON.parse(readFileSync(join(stateDir,'opencode.json')));
@@ -26,6 +27,7 @@ export async function startEngine({port=20144,profileName='opencode-profile',onC
   writeFileSync(join(profile,'config','opencode.json'),JSON.stringify(config),{mode:0o600});
   let workflowModels={};
   try{workflowModels=JSON.parse(readFileSync(join(stateDir,'workflow-models.json'),'utf8'));}catch{}
+  let singleModels={};try{singleModels=JSON.parse(readFileSync(join(stateDir,'single-models.json'),'utf8'));}catch{}
   // Opt-in ambient guidance lives in the engine's global config directory, which
   // upstream reads as AGENTS.md. It adds no request and changes no permission.
   await prepareGuidance({profileDirectory:profile, enabled:loadConfig().executionGuidance===true});
@@ -38,6 +40,8 @@ export async function startEngine({port=20144,profileName='opencode-profile',onC
     let ready=false;for(let i=0;i<80;i++){signal?.throwIfAborted();if(child.exitCode!==null)throw Error('engine_exited');try{const r=await fetch(baseUrl+'/global/health',{headers,signal:AbortSignal.timeout(1000)});if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
     if(!ready)throw Error('engine_startup_timeout');
     return {forProject:directory=>createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),
+      modelOptions:(purpose='balanced')=>rankTaskModels(loadCatalog(),singleModels,purpose),
+      resolveSingleModel:id=>resolveSingleModel(id,singleModels,loadCatalog()),
       permissionEnforcementVerified:true,
       verifyWorkflowPermissionEnforcement:({directory,agent})=>verifyNativeRole(createOpencodeClient({baseUrl,headers,directory,throwOnError:true}),agent,stateDir),
       resolveWorkflowModel:qualified=>exactWorkflowModel(qualified,workflowModels,loadCatalog()),bindWorkflowSession:options=>{if(!workflowTransport)throw Error('workflow_transport_unavailable');return workflowTransport.bind(options);},releaseWorkflowSession:id=>workflowTransport?.release(id),stop:()=>child.kill(),child};

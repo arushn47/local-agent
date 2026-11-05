@@ -3,9 +3,10 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { omniRoot, stateDir, secrets, urls, requestJSON, guardToken } from './config.mjs';
 import { compilePlan } from './routing.mjs';
-import { compactionSettings } from './context.mjs';
+import { compactionSettings,engineContextWindow } from './context.mjs';
 import { toolOutputLimits } from './workspace/guidance.mjs';
 import { workflowCandidates } from './workspace/workflow-models.mjs';
+import { singleModelAlias } from './workspace/model-selection.mjs';
 
 export async function management(config) {
   const { getCliToken, CLI_TOKEN_HEADER } = await import(pathToFileURL(join(omniRoot, 'bin/cli/utils/cliToken.mjs')).href);
@@ -83,6 +84,17 @@ export async function configureGateway(config, catalog, { managementAPI } = {}) 
     }
   }
   const existing = combos.find(c => c.name === 'localagent/coding');
+  // Single-target aliases use the ordinary guarded egress. They have no fallback
+  // and are selected at an idle message boundary. History remains in OpenCode;
+  // the guard still enforces continuation provenance and provider signatures.
+  const singleModels={},singleTargets=[];
+  for(const candidate of workflowCandidates(config,catalog)){
+    const route=routes[candidate.provider];if(!route)continue;
+    const alias=singleModelAlias(candidate.qualified),target={model:qualifyModel(route.nodeId,candidate.model),providerId:route.nodeId,connectionId:route.connectionId};
+    const previous=combos.find(c=>c.name===alias);
+    await api(previous?'/api/combos/'+previous.id:'/api/combos',{method:previous?'PATCH':'POST',body:{name:alias,strategy:'priority',context_length:candidate.context,models:[target],config:{disableSessionStickiness:true}}});
+    singleModels[candidate.qualified]={...candidate,alias};singleTargets.push({...target,alias});
+  }
   if(targets.length) await api(existing ? '/api/combos/' + existing.id : '/api/combos', { method: existing ? 'PATCH' : 'POST', body: { name: 'localagent/coding', strategy: 'priority', context_length: codingContext, models: targets, config: { disableSessionStickiness: false } } });
   else if(existing) await api('/api/combos/'+existing.id,{method:'DELETE'});
   for (const [provider, route] of Object.entries(routes)) {
@@ -108,18 +120,29 @@ export async function configureGateway(config, catalog, { managementAPI } = {}) 
   const keys = list(await api('/api/keys'), 'keys');
   const keyMetadata = keys.find(k => k.name === 'LocalAgent OpenCode');
   if (!keyMetadata?.id) throw new Error('LocalAgent inference key metadata is missing');
-  await api('/api/keys/' + keyMetadata.id, { method: 'PATCH', body: { isActive: targets.length+workflowTargets.length > 0, modelAccessMode: 'restricted', allowedModels: [...targets,...workflowTargets].map(t => t.model), allowedCombos: [...(targets.length ? ['localagent/coding', ...Object.keys(routes).map(p => `localagent/check/${p}`)] : []),...workflowTargets.map(t=>t.alias)], allowedConnections: [...new Set([...targets,...workflowTargets].map(t => t.connectionId))], noLog: true } });
+  await api('/api/keys/' + keyMetadata.id, { method: 'PATCH', body: { isActive: targets.length+workflowTargets.length+singleTargets.length > 0, modelAccessMode: 'restricted', allowedModels: [...targets,...workflowTargets,...singleTargets].map(t => t.model), allowedCombos: [...(targets.length ? ['localagent/coding', ...Object.keys(routes).map(p => `localagent/check/${p}`)] : []),...workflowTargets.map(t=>t.alias),...singleTargets.map(t=>t.alias)], allowedConnections: [...new Set([...targets,...workflowTargets,...singleTargets].map(t => t.connectionId))], noLog: true } });
+  writeFileSync(join(stateDir,'single-models.json'),JSON.stringify(singleModels,null,2),{mode:0o600});
   writeFileSync(join(stateDir,'workflow-models.json'),JSON.stringify(workflowModels,null,2),{mode:0o600});
   writeFileSync(join(stateDir, 'routes.json'), JSON.stringify(routes, null, 2));
   writeFileSync(join(stateDir, 'route-plan.json'), JSON.stringify(plan, null, 2));
   // Upstream automatic compaction must fire before the guard's byte bound rejects
   // the same request, otherwise the guard stops the task and compaction never runs.
-  const compaction = compactionSettings(codingContext, config.outputTokens);
+  const compactionBase=Math.min(codingContext,...Object.values(singleModels).map(m=>m.context),...Object.values(workflowModels).map(m=>m.context));
+  const compaction = compactionSettings(compactionBase, config.outputTokens);
+  const executionContext=context=>engineContextWindow(context,compaction,config.outputTokens);
   // Opt-in: bound tool output so one large read cannot consume a small free
   // context. Upstream still saves the full text to disk with a marker.
   const toolOutput = toolOutputLimits(config.executionGuidance);
-  const generated = { '$schema': 'https://opencode.ai/config.json', model: 'omniroute/localagent/coding', small_model: 'omniroute/localagent/coding', enabled_providers: ['omniroute'], autoupdate: false, share: 'disabled', ...(compaction ? { compaction } : {}), ...(toolOutput ? { tool_output: toolOutput } : {}), provider: { omniroute: { npm: '@ai-sdk/openai-compatible', name: 'LocalAgent', options: { baseURL: urls(config).gateway + '/v1', apiKey: '{env:LOCALAGENT_GATEWAY_KEY}', timeout: 600000 }, models: { 'localagent/coding': { name: 'LocalAgent free coding', tool_call: true, limit: { context: codingContext, output: config.outputTokens } } } } } };
-  for(const candidate of Object.values(workflowModels))generated.provider.omniroute.models[candidate.alias]={name:`LocalAgent exact ${candidate.qualified}`,tool_call:true,limit:{context:candidate.context,output:candidate.output}};
+  const generated = {
+    '$schema':'https://opencode.ai/config.json',model:'omniroute/localagent/coding',small_model:'omniroute/localagent/coding',
+    enabled_providers:['omniroute'],autoupdate:false,share:'disabled',...(compaction?{compaction}:{}),...(toolOutput?{tool_output:toolOutput}:{}),
+    provider:{omniroute:{npm:'@ai-sdk/openai-compatible',name:'LocalAgent',
+      options:{baseURL:urls(config).gateway+'/v1',apiKey:'{env:LOCALAGENT_GATEWAY_KEY}',timeout:600000},
+      models:{'localagent/coding':{name:'LocalAgent free coding',tool_call:true,limit:{context:executionContext(codingContext),output:config.outputTokens}}}
+    }}
+  };
+  for(const candidate of Object.values(workflowModels))generated.provider.omniroute.models[candidate.alias]={name:`LocalAgent exact ${candidate.qualified}`,tool_call:true,limit:{context:executionContext(candidate.context),output:candidate.output}};
+  for(const candidate of Object.values(singleModels))generated.provider.omniroute.models[candidate.alias]={name:candidate.qualified,tool_call:true,limit:{context:executionContext(candidate.context),output:candidate.output}};
   writeFileSync(join(stateDir, 'opencode.json'), JSON.stringify(generated, null, 2));
   return { targets: plan.targets, excluded: plan.excluded, gateway: urls(config).gateway };
 }

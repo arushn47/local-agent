@@ -123,6 +123,7 @@ export async function discover(config, env, fetchJSON = requestJSON) {
             contextWindow: m.inputTokenLimit || 8192,
             maxOutputTokens: m.outputTokenLimit || null,
             tools: true,
+            supportsReasoning: m.thinking===true,
             capabilities: rateGemini(rawId, m.inputTokenLimit || 8192),
             isVerified: true,
             source: 'gemini-model-input-limit-conservative-total-budget'
@@ -168,6 +169,7 @@ export async function discover(config, env, fetchJSON = requestJSON) {
               contextWindow: ctx,
               maxOutputTokens: Number(m.top_provider?.max_completion_tokens || null),
               tools: hasTools,
+              supportsReasoning: m.supported_parameters?.some(p=>['reasoning','include_reasoning','reasoning_effort'].includes(p))===true,
               capabilities: rateOpenRouter(m.id, ctx, hasTools),
               isVerified: Array.isArray(m.supported_parameters) && m.pricing != null,
               source: 'openrouter-model-catalog'
@@ -198,6 +200,7 @@ export async function discover(config, env, fetchJSON = requestJSON) {
               contextWindow: ctx,
               maxOutputTokens: 4096,
               tools: true,
+              supportsReasoning: /gpt-oss/.test(m.id),
               capabilities: rateGroq(m.id, ctx),
               isVerified: true,
               source: 'groq-model-catalog'

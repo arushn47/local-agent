@@ -19,6 +19,15 @@ export function compactionSettings(contextWindow, outputTokens = 1800) {
   const keep = Math.max(1000, Math.min(Math.floor(trigger * .3), 32000));
   return { auto: true, buffer: contextWindow - trigger, keep: { tokens: keep } };
 }
+// OpenCode has one global compaction buffer, but selected models have different
+// capacities. Translate each route's logical engine window against that shared
+// buffer so its chars/4 trigger still precedes its own unchanged byte guard.
+// Provider/catalog capacities and OmniRoute context_length remain unchanged.
+export function engineContextWindow(contextWindow, settings, outputTokens = 1800) {
+  const usable=inputCeiling(contextWindow,outputTokens);
+  if(!settings||usable===null||usable<=0)return contextWindow;
+  return settings.buffer+Math.floor(usable/4*.85);
+}
 // UTF-8 bytes are an intentionally conservative text-token upper estimate.
 // This trades some capacity for safety and includes schemas, roles and framing.
 export function requestBudget(body, capability, outputDefault = 1800) {
