@@ -1,15 +1,14 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { api } from './api';
 
 export function WorkflowTree(props) {
   const [collapsedNodes, setCollapsedNodes] = createSignal(new Set());
-  const [selectedModelStepId, setSelectedModelStepId] = createSignal(null);
-  const [modelChangePending, setModelChangePending] = createSignal(false);
   const [actionError, setActionError] = createSignal('');
 
   const wf = () => props.workflow;
   const models = () => props.models || [];
   const checkpoints = () => props.checkpoints || [];
+  const needsReview = () => Object.values(wf()?.stepStates || {}).some(step=>step.error==='workflow_review_required'&&step.reviewerApproved!==true);
   const stageStatus = (stage) => {
     if (stage.agent) return wf()?.stepStates?.[stage.id]?.status || 'pending';
     const states = (stage.steps || []).map(step => stageStatus(step));
@@ -81,7 +80,7 @@ export function WorkflowTree(props) {
       await api(`projects/${props.projectId}/workflows/${wf().id}/resume`, {});
       props.onRefresh?.();
     } catch (e) {
-      console.error('Failed to resume workflow:', e);
+      setActionError('This workflow cannot resume yet. Review its pending approval or recovery requirements.');
     }
   };
 
@@ -102,11 +101,21 @@ export function WorkflowTree(props) {
         stepId,
         alternateModelId: alternateModel
       });
-      setSelectedModelStepId(null);
       props.onRefresh?.();
     } catch (e) {
       console.error('Failed to retry step:', e);
     }
+  };
+  const handleAssign = async (stepId, modelId) => {
+    try { await api(`projects/${props.projectId}/workflows/${wf().id}/assign-model`, {stepId, modelId}); props.onRefresh?.(); }
+    catch { setActionError('The model could not be assigned. Only an unstarted plan can be edited, and the model must be eligible for its role.'); }
+  };
+  const handleReview = async stepId => {
+    try {
+      const preview=await api(`projects/${props.projectId}/workflows/${wf().id}/review-preview`,{stepId});
+      if(!window.confirm(`Approve the reviewed changes? Inspect the file diffs and test results first.\n\nFiles: ${preview.files.map(f=>f.path).join(', ')}\nTests: ${preview.tests.length?preview.tests.map(t=>`${t.id}: ${t.passed?'passed':'unverified'}`).join(', '):'No test evidence'}\n\nApproval is bound to these exact file contents. Resume is a separate action.`))return;
+      await api(`projects/${props.projectId}/workflows/${wf().id}/review-approve`,{stepId,approval:{approved:true,token:preview.token}});props.onRefresh?.();
+    }catch{setActionError('Review approval was not saved. Files or workflow state may have changed; refresh and inspect them again.');}
   };
 
   const handleRestoreCheckpoint = async (checkpointId) => {
@@ -165,7 +174,7 @@ export function WorkflowTree(props) {
               </button>
             </Show>
             <Show when={wf()?.status === 'paused'}>
-              <button class="wf-btn icon-btn" onClick={handleResume} title="Resume workflow" aria-label="Resume workflow">
+              <button class="wf-btn icon-btn" disabled={!props.executionReady || wf()?.requiresReplan || needsReview()} onClick={handleResume} title="Resume workflow" aria-label="Resume workflow">
                 ▶
               </button>
             </Show>
@@ -207,7 +216,7 @@ export function WorkflowTree(props) {
                   Restore Checkpoint
                 </button>
                 <Show when={wf()?.status === 'paused'}>
-                  <button class="wf-btn secondary-btn small" onClick={handleResume}>
+                  <button class="wf-btn secondary-btn small" disabled={!props.executionReady || wf()?.requiresReplan || needsReview()} onClick={handleResume}>
                     Continue
                   </button>
                 </Show>
@@ -219,12 +228,12 @@ export function WorkflowTree(props) {
 
       {/* 3. Expandable Live Step Tree */}
       <Show when={isExpanded('root')}>
-        <div class="wf-tree-body" role="tree" aria-label="Workflow steps">
+        <div class="wf-tree-body" role="group" aria-label="Workflow steps">
           <For each={wf()?.plan?.stages || []}>
             {(stage, stageIdx) => (
-              <div class="wf-stage-node" role="treeitem" aria-expanded={isExpanded(stage.id || `stage-${stageIdx()}`)}>
+              <div class="wf-stage-node" role="group" aria-label={stage.title || stage.id}>
                 {/* Stage Header */}
-                <div class="wf-stage-header" onClick={() => toggleNode(stage.id || `stage-${stageIdx()}`)}>
+                <button type="button" class="wf-stage-header" aria-expanded={isExpanded(stage.id || `stage-${stageIdx()}`)} onClick={() => toggleNode(stage.id || `stage-${stageIdx()}`)}>
                   <span class="wf-node-chevron" aria-hidden="true">
                     {isExpanded(stage.id || `stage-${stageIdx()}`) ? '▼' : '▶'}
                   </span>
@@ -238,7 +247,7 @@ export function WorkflowTree(props) {
                   <Show when={stage.type === 'parallel'}>
                     <span class="wf-parallel-badge">parallel ({stage.steps?.length || 0})</span>
                   </Show>
-                </div>
+                </button>
 
                 {/* Stage Children */}
                 <Show when={isExpanded(stage.id || `stage-${stageIdx()}`)}>
@@ -249,11 +258,11 @@ export function WorkflowTree(props) {
                         const stepState = () => wf()?.stepStates?.[step.id] || step;
                         const isStepExpanded = () => isExpanded(step.id);
                         return (
-                          <div class="wf-step-node" role="treeitem" aria-expanded={isStepExpanded()}>
-                            <div class="wf-step-header" onClick={() => toggleNode(step.id)}>
-                              <span class="wf-node-chevron small" aria-hidden="true">
+                          <div class="wf-step-node" role="group" aria-label={step.title || step.id}>
+                            <div class="wf-step-header">
+                              <button type="button" class="wf-node-chevron small wf-step-disclosure" aria-label={'Toggle ' + (step.title || step.id)} aria-expanded={isStepExpanded()} onClick={() => toggleNode(step.id)}>
                                 {isStepExpanded() ? '▼' : '▶'}
-                              </span>
+                              </button>
                               <span class={`wf-status-badge ${getStatusClass(stepState().status)}`}>
                                 {getStatusIcon(stepState().status)}
                               </span>
@@ -263,47 +272,22 @@ export function WorkflowTree(props) {
                               </Show>
 
                               {/* Interactive Model Chip */}
-                              <div
-                                class="wf-model-chip-wrap"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedModelStepId(selectedModelStepId() === step.id ? null : step.id);
-                                }}
-                              >
-                                <button
+                              <div class="wf-model-chip-wrap">
+                                <select
                                   class="wf-model-chip"
-                                  title="Click to change model assignment"
-                                  aria-haspopup="listbox"
-                                  aria-expanded={selectedModelStepId() === step.id}
+                                  disabled={wf()?.status !== 'pending'}
+                                  aria-label={'Model for ' + (step.title || step.id)}
+                                  title={stepState().assignedModel || 'Choose an exact model'}
+                                  value={stepState().assignedModel || ''}
+                                  onChange={e => handleAssign(step.id, e.currentTarget.value)}
                                 >
-                                  {stepState().assignedModel ? stepState().assignedModel.split('/').pop() : 'auto'}
-                                  <span class="wf-chip-arrow" aria-hidden="true">▾</span>
-                                </button>
-
-                                {/* Model Dropdown */}
-                                <Show when={selectedModelStepId() === step.id}>
-                                  <div class="wf-model-dropdown" role="listbox" aria-label="Select model">
-                                    <div class="wf-dropdown-head">Select Model for {step.agent || 'Agent'}</div>
+                                  <Show when={!models().some(m => m.qualifiedId === stepState().assignedModel)}><option value={stepState().assignedModel || ''}>{stepState().assignedModel || 'Choose a model'}</option></Show>
                                     <For each={models()}>
                                       {(m) => (
-                                        <button
-                                          class={`wf-model-option ${stepState().assignedModel === m.qualifiedId ? 'selected' : ''}`}
-                                          role="option"
-                                          aria-selected={stepState().assignedModel === m.qualifiedId}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleRetry(step.id, m.qualifiedId);
-                                          }}
-                                        >
-                                          <span class="wf-opt-name">{m.name}</span>
-                                          <span class="wf-opt-meta">
-                                            {m.tier === 'free' ? 'Free' : `$${(m.pricing?.prompt * 1e6).toFixed(1)}/M`} · {m.provider}
-                                          </span>
-                                        </button>
+                                        <option value={m.qualifiedId}>{m.name} · {m.provider} · {m.tier === 'free' ? 'Free' : 'Paid'}</option>
                                       )}
                                     </For>
-                                  </div>
-                                </Show>
+                                </select>
                               </div>
 
                               <Show when={stepState().durationMs}>
@@ -315,7 +299,7 @@ export function WorkflowTree(props) {
                             <Show when={isStepExpanded()}>
                               <div class="wf-step-details">
                                 <For each={props.sessions?.[step.id]?.permissions || []}>
-                                  {permission => <div role="group" aria-label="Workflow tool permission">
+                                  {permission => <div role="group" aria-label="Workflow tool permission" data-permission-id={permission.id}>
                                     <p>{permission.permission}: {(permission.patterns || []).join(', ')}</p>
                                     <button class="wf-btn" onClick={() => handlePermission(step.id, permission.id, 'once')}>Allow once</button>
                                     <button class="wf-btn" onClick={() => handlePermission(step.id, permission.id, 'reject')}>Reject</button>
@@ -347,10 +331,14 @@ export function WorkflowTree(props) {
                                     <pre class="wf-error-box">{stepState().error}</pre>
                                   </div>
                                 </Show>
+                                <For each={props.sessions?.[step.id]?.messages || []}>{message=><For each={message.parts?.filter(part=>part.type==='tool') || []}>{part=><details><summary>{part.tool}: {part.command || part.title} · {part.exit === undefined ? part.status : `exit ${part.exit}`}</summary><pre class="wf-output-box">{part.output}</pre></details>}</For>}</For>
+                                <For each={props.sessions?.[step.id]?.diffs || []}>{diff=><details><summary>Changes: {diff.file}</summary><pre class="wf-output-box">{diff.patch || `Before:\n${diff.before || ''}\nAfter:\n${diff.after || ''}`}</pre></details>}</For>
+                                <Show when={stepState().error==='workflow_review_required' && wf()?.status==='paused'}><button class="wf-btn" onClick={()=>handleReview(step.id)}>Approve reviewed changes</button></Show>
 
                                 <div class="wf-detail-actions">
                                   <button
                                     class="wf-btn secondary-btn small"
+                                    disabled={!props.executionReady || stepState().status !== 'failed' || !!stepState().sessionID}
                                     onClick={() => handleRetry(step.id, stepState().assignedModel)}
                                   >
                                     ↺ Retry Step

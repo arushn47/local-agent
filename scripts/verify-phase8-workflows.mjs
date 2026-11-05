@@ -10,7 +10,7 @@ import { root, loadConfig } from '../src/config.mjs';
 import { launchBrowser } from './browser.mjs';
 import { saveCatalog } from '../src/catalog.mjs';
 import { createPlan } from '../src/workspace/planner.mjs';
-import { createWorkflowInstance, saveWorkflow } from '../src/workspace/workflow-engine.mjs';
+import { createWorkflowInstance, saveWorkflow, loadWorkflow } from '../src/workspace/workflow-engine.mjs';
 import { createCheckpoint } from '../src/workspace/checkpoints.mjs';
 import { POLICIES } from '../src/workspace/models.mjs';
 
@@ -228,15 +228,21 @@ try {
   // 3. Test Interactive Model Switcher
   console.log('3. Testing interactive model chip dropdown...');
   const modelChip = page.locator('.wf-model-chip').first();
-  await modelChip.click();
-
-  const modelDropdown = page.locator('.wf-model-dropdown');
-  await modelDropdown.waitFor({ state: 'visible', timeout: 3000 });
-  const optionsCount = await page.locator('.wf-model-option').count();
+  assert.ok(await modelChip.isDisabled(), 'A running plan must not offer an assignment that cannot be applied');
+  await page.getByRole('button',{name:'+ New Workflow',exact:true}).click();
+  await page.getByLabel('Task or Feature Objective').fill('Preflight model assignment');
+  await page.getByLabel('Reviewed plan JSON (optional)').fill(JSON.stringify({id:'wf-preflight',title:'Preflight assignment',policy:'free_only',stages:[{id:'work',title:'Inspect',agent:'researcher',assignedModel:'gemini/gemini-2.5-flash'}]}));
+  await page.getByRole('button',{name:'Create & Plan',exact:true}).click();
+  await page.getByText('Preflight assignment',{exact:true}).waitFor();
+  const modelDropdown = page.locator('select.wf-model-chip').first();
+  const optionsCount = await modelDropdown.locator('option').count();
   assert.ok(optionsCount >= 2, 'Available models must be listed in dropdown');
-
-  // Close dropdown by clicking header
-  await page.locator('.wf-card-header').click();
+  await modelDropdown.selectOption('gemini/gemini-3.5-flash-lite');
+  await page.waitForFunction(() => document.querySelector('select.wf-model-chip')?.title==='gemini/gemini-3.5-flash-lite');
+  assert.equal(loadWorkflow('wf-preflight',root).stepStates.work.assignedModel,'gemini/gemini-3.5-flash-lite');
+  assert.ok(await page.getByRole('button',{name:'Start workflow',exact:true}).isDisabled(), 'Production execution must stay gated');
+  await page.locator('#workflow-picker').selectOption(workflowInstance.id);
+  await page.getByText(workflowInstance.title,{exact:true}).waitFor();
 
   // 4. Test Checkpoint Controls & Restore Banner
   console.log('4. Verifying Checkpoint controls...');
@@ -254,7 +260,7 @@ try {
   });
   console.log(`   Dark mode violations: ${darkResults.violations.length}`);
   if (darkResults.violations.length > 0) {
-    console.error(JSON.stringify(darkResults.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help })), null, 2));
+    console.error(JSON.stringify(darkResults.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help, targets:v.nodes.map(n=>n.target) })), null, 2));
   }
   assert.equal(darkResults.violations.length, 0, 'Zero axe-core accessibility violations in dark mode');
 

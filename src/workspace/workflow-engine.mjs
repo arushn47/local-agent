@@ -167,6 +167,7 @@ export function resumeWorkflow(workflowId, workspaceDir) {
     throw new Error(`workflow_not_paused: ${wf.status}`);
   }
   if (wf.requiresReplan) throw Error('invalid_workflow_replan_required');
+  if (Object.values(wf.stepStates).some(s=>s.error==='workflow_review_required'&&s.reviewerApproved!==true)) throw Error('workflow_review_approval_required');
   if (executions.has(executionKey(workspaceDir,workflowId))) throw Error('workflow_runner_still_stopping');
   wf.status = WORKFLOW_STATUS.RUNNING;
   saveWorkflow(wf, workspaceDir);
@@ -203,6 +204,22 @@ export function retryStep(workflowId, stepId, { alternateModelId = null, workspa
   }
   saveWorkflow(wf, workspaceDir, {allowTerminalTransition:true});
   return { success: true, workflowId, stepId, assignedModel: step.assignedModel, status: step.status };
+}
+
+export function assignWorkflowModel(workflowId, stepId, modelId, workspaceDir, catalog) {
+  const release = acquireExecution(workspaceDir, workflowId);
+  try {
+  const file = statePath(workspaceDir, 'workflows', workflowId);
+  return ledgerTransaction(file, {}, wf => {
+    const step = wf.stepStates?.[stepId];
+    if (!step || wf.status !== WORKFLOW_STATUS.PENDING || Object.values(wf.stepStates).some(s => s.sessionID || s.attempts)) throw Error('invalid_workflow_assignment_state');
+    if (getModel(catalog,modelId)?.qualifiedId!==modelId || !validateModelAssignment({catalog,modelId,role:step.agent,policy:wf.policy}).valid) throw Error('invalid_workflow_model');
+    const update = nodes => { for (const node of nodes || []) { if (node.id === stepId) node.assignedModel = modelId; update(node.steps); } };
+    update(wf.plan.stages); step.assignedModel = modelId;
+    wf.updatedAt = new Date().toISOString();
+    return {success:true,stepId,assignedModel:modelId};
+  });
+  } finally { release(); }
 }
 
 export function rollbackToCheckpoint(workflowId, checkpointId, workspaceDir, approval) {
@@ -445,6 +462,8 @@ export async function executeStep({
     latestStep.output = executionOutput;
     latestStep.testPassed = testPassed;
     latestStep.reviewerApproved = reviewerApproved;
+    latestStep.modifiedFiles = modifiedFiles;
+    if(latestStep.error==='workflow_review_required')latestStep.evidenceSource='supervised_opencode_session';
     if (latestStep.error === 'workflow_review_required') latestWf.status = WORKFLOW_STATUS.PAUSED;
     saveWorkflow(latestWf, workspaceDir);
     return {

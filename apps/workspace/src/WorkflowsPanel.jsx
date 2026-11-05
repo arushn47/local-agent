@@ -1,6 +1,7 @@
-import { createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, For, Show } from 'solid-js';
 import { api } from './api';
 import { WorkflowTree } from './WorkflowTree';
+import { Modal } from './Modal';
 
 export function WorkflowsPanel(props) {
   const [executionReady, setExecutionReady] = createSignal(false);
@@ -14,28 +15,32 @@ export function WorkflowsPanel(props) {
   const [loading, setLoading] = createSignal(false);
   const [showNewModal, setShowNewModal] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal('');
+  const [newPlan, setNewPlan] = createSignal('');
   const [newTemplate, setNewTemplate] = createSignal('feature-implement-verify');
   const [newPolicy, setNewPolicy] = createSignal('free_only');
   const [createError, setCreateError] = createSignal('');
+  let generation = 0;
 
   const projectId = () => props.project?.id;
 
   const loadData = async () => {
-    if (!projectId()) return;
+    const id = projectId(), revision = generation;
+    if (!id) return;
     setLoading(true);
     try {
       const status = await api('status');setExecutionReady(status.workflowExecutionReady === true);
       const [wfList, tplList, mdlList] = await Promise.all([
-        api(`projects/${projectId()}/workflows`),
+        api(`projects/${id}/workflows`),
         api('templates'),
         api('models')
       ]);
+      if (revision !== generation) return;
       setWorkflows(wfList || []);
       setTemplates(tplList || []);
       setModels(mdlList || []);
 
       if (wfList && wfList.length > 0) {
-        const idToSelect = selectedWorkflowId() || wfList[0].id;
+        const idToSelect = wfList.some(wf => wf.id === selectedWorkflowId()) ? selectedWorkflowId() : wfList[0].id;
         await selectWorkflow(idToSelect);
       } else {
         setSelectedWorkflow(null);
@@ -48,20 +53,22 @@ export function WorkflowsPanel(props) {
   };
 
   const selectWorkflow = async (wfid) => {
-    if (!projectId() || !wfid) return;
+    const id = projectId(), revision = generation;
+    if (!id || !wfid) return;
     setSelectedWorkflowId(wfid);
     try {
       const [wfDetail, chkList] = await Promise.all([
-        api(`projects/${projectId()}/workflows/${wfid}`),
-        api(`projects/${projectId()}/checkpoints?workflowId=${wfid}`)
+        api(`projects/${id}/workflows/${wfid}`),
+        api(`projects/${id}/checkpoints?workflowId=${wfid}`)
       ]);
+      if (revision !== generation || selectedWorkflowId() !== wfid) return;
       setSelectedWorkflow(wfDetail);
       setCheckpoints(chkList || []);
       const pairs = await Promise.all(Object.values(wfDetail.stepStates || {}).filter(step => step.sessionID).map(async step => {
-        try { return [step.id, await api(`projects/${projectId()}/workflows/${wfid}/session?stepId=${encodeURIComponent(step.id)}`)]; }
+        try { return [step.id, await api(`projects/${id}/workflows/${wfid}/session?stepId=${encodeURIComponent(step.id)}`)]; }
         catch { return [step.id, null]; }
       }));
-      setStepSessions(Object.fromEntries(pairs));
+      if (revision === generation && selectedWorkflowId() === wfid) setStepSessions(Object.fromEntries(pairs));
     } catch (e) {
       console.error('Failed to load workflow details:', e);
     }
@@ -73,6 +80,7 @@ export function WorkflowsPanel(props) {
     try {
       setCreateError('');
       const created = await api(`projects/${projectId()}/workflows`, {
+        ...(newPlan().trim() ? {plan:JSON.parse(newPlan())} : {}),
         prompt: newTitle(),
         templateId: newTemplate(),
         policy: newPolicy(),
@@ -80,6 +88,7 @@ export function WorkflowsPanel(props) {
       });
       setShowNewModal(false);
       setNewTitle('');
+      setNewPlan('');
       await loadData();
       if (created?.id) await selectWorkflow(created.id);
     } catch (e) {
@@ -88,8 +97,12 @@ export function WorkflowsPanel(props) {
     }
   };
 
+  createEffect(() => {
+    projectId(); generation++;
+    setSelectedWorkflowId(null); setSelectedWorkflow(null); setWorkflows([]); setStepSessions({}); setCheckpoints([]);
+    void loadData();
+  });
   onMount(() => {
-    loadData();
     const interval = setInterval(() => {
       const cur = selectedWorkflow();
       if (cur && (cur.status === 'running' || cur.status === 'pending')) {
@@ -101,7 +114,7 @@ export function WorkflowsPanel(props) {
 
   return (
     <div class="workflows-panel" role="region" aria-label="Workflows management panel">
-      <p role="status">Workflow execution is temporarily unavailable. You can save plans without running agents.</p>
+      <p role="status">{executionReady() ? 'Review exact model assignments and tool permissions before starting.' : 'Workflow execution is temporarily unavailable. You can save and edit plans without running agents.'}</p>
       <Show when={createError()}><p role="alert">{createError()}</p></Show>
       {/* Workflows Sub-header */}
       <div class="wf-panel-subhead">
@@ -169,7 +182,7 @@ export function WorkflowsPanel(props) {
 
       {/* Create Workflow Modal */}
       <Show when={showNewModal()}>
-        <div class="wf-modal-backdrop" onClick={() => setShowNewModal(false)}>
+        <Modal onClose={() => setShowNewModal(false)}>
           <div
             class="wf-modal-dialog"
             role="dialog"
@@ -220,6 +233,11 @@ export function WorkflowsPanel(props) {
               </div>
 
               <div class="wf-form-field">
+                <label for="wf-plan-input">Reviewed plan JSON (optional)</label>
+                <textarea id="wf-plan-input" value={newPlan()} onInput={e => setNewPlan(e.currentTarget.value)} rows="6" placeholder="Paste a custom plan with exact files, commands and models." />
+              </div>
+
+              <div class="wf-form-field">
                 <label for="wf-policy-select">Spending Policy</label>
                 <select
                   id="wf-policy-select"
@@ -246,7 +264,7 @@ export function WorkflowsPanel(props) {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       </Show>
     </div>
   );

@@ -9,11 +9,12 @@ import { compilePlan } from '../routing.mjs';
 import { readEvents } from '../telemetry.mjs';
 import { providerEligibility } from '../policy.mjs';
 import { listProjectFiles, readProjectFile } from './project-files.mjs';
-import { listWorkflows, createWorkflowInstance, loadWorkflow, pauseWorkflow, resumeWorkflow, cancelWorkflow, retryStep, rollbackToCheckpoint, runWorkflow, recoverWorkflow } from './workflow-engine.mjs';
+import { listWorkflows, createWorkflowInstance, loadWorkflow, pauseWorkflow, resumeWorkflow, cancelWorkflow, retryStep, assignWorkflowModel, rollbackToCheckpoint, runWorkflow, recoverWorkflow } from './workflow-engine.mjs';
 import { createPlan, validatePlan } from './planner.mjs';
 import { listTemplates } from './workflow-templates.mjs';
 import { getAllModels, validateModelAssignment } from './models.mjs';
 import { listCheckpoints, previewCheckpointRestore } from './checkpoints.mjs';
+import {previewWorkflowReview,approveWorkflowReview} from './workflow-review.mjs';
 const workflowReady=engine=>engine?.workflowReady===true&&engine?.permissionEnforcementVerified===true;
 const keys={gemini:'GEMINI_API_KEY',groq:'GROQ_API_KEY',openrouter:'OPENROUTER_API_KEY'};
 function send(res,status,value){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
@@ -112,7 +113,7 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           return send(res,201,instance);
         }
       }
-      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|rollback|rollback-preview|session|recover|start))?$/);
+      const wfAction=path.match(/^\/api\/v1\/projects\/([A-Za-z0-9_-]+)\/workflows\/([A-Za-z0-9_.-]+)(?:\/(pause|resume|cancel|retry|assign-model|review-preview|review-approve|rollback|rollback-preview|session|recover|start))?$/);
       if(wfAction){
         const prj=projects.get(wfAction[1]);const wfid=wfAction[2];const op=wfAction[3];
         if(op==='session'&&req.method==='GET'){
@@ -127,6 +128,9 @@ export function createWorkspaceServer({config,projects,tasks,credentials,preview
           const body=await json(req);
           if(!body || typeof body!=='object' || Array.isArray(body))throw Error('invalid_workflow_request');
           if(['start','resume','retry'].includes(op) && !workflowReady(engine))return send(res,409,{error:'workflow_execution_not_ready'});
+          if(op==='assign-model')return send(res,200,assignWorkflowModel(wfid,body.stepId,body.modelId,prj.path,loadCatalog()));
+          if(op==='review-preview')return send(res,200,previewWorkflowReview(wfid,body.stepId,prj.path));
+          if(op==='review-approve')return send(res,200,approveWorkflowReview(wfid,body.stepId,prj.path,body.approval));
           if(op==='start'){const wf=loadWorkflow(wfid,prj.path);if(wf?.status!=='pending')throw Error('invalid_workflow_start_state');void runWorkflow({workflowId:wfid,workspaceDir:prj.path,projectId:prj.id,engine,tasks,catalog:loadCatalog()}).catch(()=>{});return send(res,202,{accepted:true});}
           if(op==='recover')return send(res,200,await recoverWorkflow({workflowId:wfid,workspaceDir:prj.path,tasks}));
           if(op==='pause')return send(res,200,pauseWorkflow(wfid,prj.path));
