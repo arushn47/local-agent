@@ -45,7 +45,7 @@ export async function verifyNativeSingleUI({engine,config,profile,getCalls}){
             const composer=page.getByLabel('Describe your coding task');
             await composer.fill('CASE_single_ui Keep the fixed tests unchanged.');await page.getByRole('button',{name:'Queue message',exact:true}).click();
             const queued=page.getByRole('article',{name:'Queued message'});
-            await queued.getByRole('button',{name:'Edit message',exact:true}).click();await page.getByLabel('Edit queued message',{exact:true}).fill('CASE_single_ui Steering: preserve fixed tests');await page.waitForTimeout(1600);await page.keyboard.type(' and continue.');assert.equal(await page.getByLabel('Edit queued message',{exact:true}).inputValue(),'CASE_single_ui Steering: preserve fixed tests and continue.');await queued.getByRole('button',{name:'Save message',exact:true}).click();
+            await queued.getByRole('button',{name:'Edit message',exact:true}).click();assert.ok(await queued.getByRole('button',{name:'Steer now',exact:true}).isDisabled());await page.getByLabel('Edit queued message',{exact:true}).fill('CASE_single_ui Steering: preserve fixed tests');await page.waitForTimeout(1600);await page.keyboard.type(' and continue.');assert.equal(await page.getByLabel('Edit queued message',{exact:true}).inputValue(),'CASE_single_ui Steering: preserve fixed tests and continue.');await queued.getByRole('button',{name:'Save message',exact:true}).click();
             await queued.getByRole('button',{name:'Steer now',exact:true}).click();
             await queued.waitFor({state:'hidden'});
             await composer.fill('CASE_single_ui Queued follow-up: report the finished result.');await page.getByRole('button',{name:'Queue message',exact:true}).click();
