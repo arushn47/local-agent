@@ -39,6 +39,21 @@ coverage/
 *.7z
 *.tar
 *.gz
+
+# Operating system files
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+
 # Retain historical evidence on disk; do not commit raw sessions, screenshots,
 # profiles, user-data snapshots or machine-specific inventories.
 validation/**

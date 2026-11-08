@@ -21,7 +21,7 @@ export function readPreviewFile(root,name,options){
  const fd=openSync(checked.file,constants.O_RDONLY|(constants.O_NOFOLLOW||0));
  try{
   const opened=fstatSync(fd,{bigint:true});
-  if(opened.ino!==before.ino||opened.dev!==before.dev||opened.nlink>1n||lstatSync(checked.file).isSymbolicLink())throw Error('preview_path_denied');
+  if(opened.ino!==before.ino||(before.dev!==0n&&opened.dev!==before.dev)||opened.nlink>1n||lstatSync(checked.file).isSymbolicLink())throw Error('preview_path_denied');
   const data=Buffer.alloc(Math.min(Number(opened.size)+1,5*1024*1024+1)),length=readSync(fd,data,0,data.length,0);
   if(length>5*1024*1024)throw Error('preview_file_too_large');return data.subarray(0,length);
  }finally{closeSync(fd);}
